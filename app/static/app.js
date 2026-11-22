@@ -10197,17 +10197,28 @@ function zeichneEinstellungen() {
       <td><form class="ein-key" data-ein-key="${esc(e.name)}"><input type="${e.geheim ? 'password' : 'text'}" name="wert" autocomplete="off" maxlength="300" placeholder="${e.geheim ? 'neuer Wert' : esc(e.wert ?? 'Wert')}" aria-label="${esc(e.name)}"><button class="knopf ca-mini" type="submit">Speichern</button>${e.im_tool ? `<button class="knopf ca-mini" type="button" data-ein-key-weg="${esc(e.name)}">Entfernen</button>` : ''}</form></td></tr>`;
   }), 'ein-tabelle ein-keys-tabelle'));
 
+  const umzug = ggKarte('ein-umzug', 'Umzug auf den NUC', [
+    ['Was mitkommt', 'Deine eigenen Daten (Thesen, Journal, Layouts, Watchlist, Alarme, Trade-Republic-Exporte, Einstellungen der Seiten) und alle gemeinsamen Marktdaten, die Vinter über die Zeit gesammelt hat (Handelsdaten, IV-Flächen, Fed-Verlauf, Schätzungen, Regime, bearbeitete Listen).'],
+    ['Was nicht mitkommt', 'Keys und Konten (am NUC neu eintragen), die .env-Datei und der Zwischenspeicher, der sich von selbst wieder füllt.'],
+    ['Sicher einspielen', 'Gesammelte Verläufe werden zusammengeführt: Was am NUC schon gespeichert ist, bleibt. Andere Dateien werden ersetzt, die alte Fassung kommt vorher in eine Sicherung (Datenordner umzug/sicherung_…). Gelöscht wird nichts.'],
+  ], `<ol class="ein-schritte">
+      <li><b>Am PC:</b> <a class="knopf primaer" href="/api/umzug/export" download id="ein-umzug-export">Umzugsdatei herunterladen</a> <small class="sekundaer">(rund 50–100 MB, das Packen dauert bis zu einer Minute)</small></li>
+      <li><b>Am NUC</b> (als Admin angemeldet, auf dieser Seite): Datei auswählen und einspielen.</li>
+    </ol>
+    <form class="ein-form" id="ein-umzug"><label class="feld"><span>Umzugsdatei (vinter-umzug-….zip)</span><input type="file" name="datei" accept=".zip,application/zip" required></label>
+      <button class="knopf" type="submit">Einspielen</button><p class="klein" id="ein-umzug-meldung" role="status"></p></form>`);
+
   const anleitung = ggKarte('ein-anleitung', 'So kommen Freunde dazu (Tailscale)', [
     ['Warum Tailscale', 'Vinter steht nicht im offenen Internet. Nur Geräte, die du freigibst, erreichen überhaupt die Anmeldeseite. Kostenlos für private Nutzung.'],
   ], `<ol class="ein-schritte">
-      <li><b>Einmalig (dein Vater, Home Assistant):</b> Add-on „Tailscale“ installieren und mit deinem Tailscale-Konto anmelden. Im Vinter-Add-on <code>anmeldung: passwort</code> setzen. Beim ersten Start steht im Log des Vinter-Add-ons „VINTER EINRICHTUNG … Einrichtungscode“.</li>
+      <li><b>Einmalig (dein Vater, Home Assistant):</b> Add-on „Tailscale“ installieren und mit deinem Tailscale-Konto anmelden. Die Anmeldung mit Passwort ist im Vinter-Add-on immer an. Beim ersten Start steht im Log des Vinter-Add-ons „VINTER EINRICHTUNG … Einrichtungscode“.</li>
       <li><b>Einmalig (du):</b> Vinter über die Tailscale-Adresse des NUC öffnen (z. B. <code>http://homeassistant:8099</code>), mit dem Einrichtungscode dein Admin-Konto anlegen. Dein bisheriges Depot wird übernommen. Unter „Keys und Einstellungen“ <code>VINTER_ADRESSE</code> auf diese Adresse setzen, damit Einladungslinks stimmen.</li>
       <li><b>Je Freund:</b> Er installiert die Tailscale-App (iPhone, Android, PC) und legt ein kostenloses Konto an. Du gibst ihm in der Tailscale-Verwaltung (login.tailscale.com → Machines → NUC → „Share“) nur den NUC frei. In den Zugriffsregeln (ACL) nur den Vinter-Port erlauben, nicht Home Assistant.</li>
       <li><b>Je Freund:</b> Hier oben „Freund einladen“, den Link privat schicken. Er öffnet ihn mit eingeschaltetem Tailscale, legt Name und Passwort fest und lädt seinen eigenen Trade-Republic-Export hoch.</li>
       <li><b>Handy:</b> Im Browser „Zum Home-Bildschirm“ wählen, dann startet Vinter wie eine App.</li>
     </ol>
     <p class="klein sekundaer">Beispiel für die Tailscale-Zugriffsregel (ACL), Freunde nur auf Port 8099 des NUC: <code>{"action": "accept", "src": ["autogroup:shared"], "dst": ["homeassistant:8099"]}</code></p>`);
-  el('ein-inhalt').innerHTML = konto + freunde + keys + anleitung;
+  el('ein-inhalt').innerHTML = konto + freunde + keys + umzug + anleitung;
 }
 
 el('seite-einstellungen').addEventListener('click', async (e) => {
@@ -10254,6 +10265,19 @@ Nur vorübergehend? Dann lieber „Sperren“.`)) return;
 el('seite-einstellungen').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
+  if (f.id === 'ein-umzug') {
+    const datei = f.elements.datei.files[0], m = el('ein-umzug-meldung');
+    if (!datei) return;
+    if (!confirm(`${datei.name} einspielen?\n\nVorhandene Verläufe bleiben und werden ergänzt. Ersetzte Dateien kommen vorher in eine Sicherung.`)) return;
+    m.textContent = `Wird hochgeladen und eingespielt (${gz1.format(datei.size / 1048576)} MB) … bitte warten.`;
+    f.querySelector('button').disabled = true;
+    const r = await fetch('/api/umzug/import', { method: 'POST', headers: { 'x-vinter': 'umzug', 'content-type': 'application/zip' }, body: datei })
+      .then(async (x) => x.json()).catch(() => ({ fehler: 'Der Server antwortet gerade nicht.' }));
+    f.querySelector('button').disabled = false;
+    m.textContent = r.fehler ? r.fehler
+      : `Fertig: ${r.neu} Dateien neu, ${r.ersetzt} ersetzt, ${r.gleich} unverändert; ${r.datenbanken} Datenbanken mit ${r.zeilen_neu.toLocaleString('de-DE')} neuen Einträgen.${r.sicherung ? ` Alte Fassungen liegen in umzug/${r.sicherung}.` : ''} Seite neu laden, um alles zu sehen.`;
+    return;
+  }
   if (f.id === 'ein-pw') {
     const d = Object.fromEntries(new FormData(f));
     if (d.neu !== d.wdh) { el('ein-pw-meldung').textContent = 'Die beiden neuen Passwörter sind nicht gleich.'; return; }

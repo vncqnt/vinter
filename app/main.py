@@ -286,6 +286,52 @@ async def verwaltung_konto_weg(name: str, request: Request):
     return await _konto_aktion(request, lambda _: konten.konto_entfernen(name, k["name"]))
 
 
+@app.get("/api/umzug/export")
+def umzug_export(request: Request):
+    """Umzug PC -> NUC (nur Admin): eigene Daten und gemeinsame Marktdaten als ZIP, ohne Keys und Zwischenspeicher."""
+    from starlette.background import BackgroundTask
+    from .anmeldung import admin
+    from .konfig import BENUTZER_DATEN, DATEN, MARKT_DATEN
+    from .status import VERSION
+    from .umzug import export_bauen
+    k = admin(request)
+    datei = DATEN / "umzug" / f"export_{datetime.now():%Y%m%d_%H%M%S}.zip"
+    export_bauen(datei, MARKT_DATEN, BENUTZER_DATEN / k["ordner"], VERSION)
+    # identity: die GZip-Middleware soll das ZIP nicht noch einmal packen
+    return FileResponse(datei, media_type="application/zip", filename=f"vinter-umzug-{datetime.now():%Y-%m-%d}.zip",
+                        headers={"Content-Encoding": "identity"}, background=BackgroundTask(datei.unlink, missing_ok=True))
+
+
+@app.post("/api/umzug/import")
+async def umzug_import(request: Request):
+    """Umzugsdatei einspielen (nur Admin, Header x-vinter: umzug). Führt Datenbanken zusammen, sichert ersetzte Dateien."""
+    import asyncio
+    from .anmeldung import admin
+    from .konfig import BENUTZER_DATEN, DATEN, MARKT_DATEN
+    from .umzug import GRENZE, UmzugFehler, einspielen
+    k = admin(request)
+    if request.headers.get("x-vinter") != "umzug":
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    arbeit = DATEN / "umzug"
+    arbeit.mkdir(parents=True, exist_ok=True)
+    datei = arbeit / f"eingang_{datetime.now():%Y%m%d_%H%M%S}.zip"
+    groesse = 0
+    try:
+        with open(datei, "wb") as f:
+            async for stueck in request.stream():
+                groesse += len(stueck)
+                if groesse > GRENZE:
+                    return JSONResponse({"fehler": "Die Datei ist zu groß."}, status_code=400)
+                f.write(stueck)
+        return await asyncio.to_thread(einspielen, datei, MARKT_DATEN, BENUTZER_DATEN / k["ordner"], arbeit)
+    except UmzugFehler as fehler:
+        return JSONResponse({"fehler": str(fehler)}, status_code=400)
+    except Exception:
+        return JSONResponse({"fehler": "Der Umzug ist fehlgeschlagen. Es wurde nichts gelöscht."}, status_code=500)
+    finally:
+        datei.unlink(missing_ok=True)
+
+
 @app.get("/api/status")
 def status_seite(request: Request):
     """Status-Seite (nur Admin): Version, Hintergrund-Jobs, Datenquellen, Speicher, KI, letzte Fehler."""
