@@ -3440,6 +3440,7 @@ text.fu-g-rechts { fill: color-mix(in oklch, var(--gold) 85%, var(--text)); }
 .tv-e.kommt rect { fill: var(--grund); stroke: var(--akzent); stroke-dasharray: 2 2; }
 .tv-e.kommt text { fill: var(--akzent); }
 .tv-e-linie { stroke: var(--akzent); stroke-width: 1; stroke-dasharray: 3 4; opacity: .5; }
+.tv-l-ab { color: var(--grau); font-size: .6875rem; }
 .tv-l-earnings { margin-top: 4px; font-size: .75rem; color: var(--text); }
 
 /* Risiko: Werte aus dem Markt in der Korrelation */
@@ -3775,9 +3776,9 @@ body:not(.ist-freund) .nur-freund { display: none !important; }
 .zn-grund { stroke: color-mix(in srgb, var(--text) 18%, transparent); stroke-width: 1; stroke-dasharray: 1 3; }
 
 /* Mini-Features */
-.ca-mini { display: flex; flex-wrap: wrap; gap: 4px 18px; width: 100%; font-size: .8rem; color: var(--grau); margin-top: 6px; }
-.ca-mini b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
-.ca-mini b.gold { color: var(--gold); } .ca-mini b.plus { color: var(--gewinn); } .ca-mini b.minus { color: var(--verlust); }
+.ca-kurzinfo { display: flex; flex-wrap: wrap; gap: 4px 18px; width: 100%; font-size: .8rem; color: var(--grau); margin-top: 6px; }
+.ca-kurzinfo b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.ca-kurzinfo b.gold { color: var(--gold); } .ca-kurzinfo b.plus { color: var(--gewinn); } .ca-kurzinfo b.minus { color: var(--verlust); }
 .pos-spur { display: block; width: 84px; height: 20px; margin: 2px 0; }
 .pos-spur svg { width: 100%; height: 100%; display: block; }
 .pos-spur polyline { fill: none; stroke-width: 1.4; vector-effect: non-scaling-stroke; }

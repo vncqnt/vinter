@@ -11258,9 +11258,9 @@ async function caMeineLaden(ticker) {
   if (tv.haupt) { if (tv.ueber.avwap) tvAufbauen(); else tvPreisLinien(); }
   const kopf = el('ca-kopf');
   if (!kopf || !k || k.fehler) return;
-  kopf.querySelector('.ca-mini')?.remove();
+  kopf.querySelector('.ca-kurzinfo')?.remove();
   const s = k.sigma_heute;
-  kopf.insertAdjacentHTML('beforeend', `<div class="ca-mini" title="Kurz notiert, Tagesschlusskurse bis ${datumDe(k.stand)}">
+  kopf.insertAdjacentHTML('beforeend', `<div class="ca-kurzinfo" title="Kurz notiert, Tagesschlusskurse bis ${datumDe(k.stand)}">
     <span>Letzter Tag <b class="${klasse(k.tag)}">${ggPz(k.tag)}</b> = <b class="${Math.abs(s) >= 2 ? 'gold' : ''}">${s === null ? '–' : `${ggVz(s, gz1)} σ`}</b></span>
     <span>52 W.: <b>${ggPz(k.abstand_hoch52)}</b> zum Hoch, <b>${ggPz(k.abstand_tief52)}</b> zum Tief</span>
     <span>Drawdown <b class="${klasse(k.drawdown)}">${ggPz(k.drawdown)}</b> <small>seit Hoch ${datumDe(k.hoch_datum)}</small></span>
@@ -12814,7 +12814,7 @@ function tvLegende(p) {
   const zeit = tvIntraday() ? new Date((d.t[i]) * 1000).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : ggDatum(d.datum[i]);
   const alsProzent = (s0) => tv.vergleich.length && tv.roh.some((r0) => r0.serie === s0); // im Vergleich sind Kursfenster-Werte Prozent ab Start
   const werte = (tv.legendeSerien ?? []).map(([n, s, f, farbe]) => { const x = p?.seriesData?.get(s) ?? s.dataByIndex(i); const v = x?.value; if (alsProzent(s)) f = (y) => `${ggVz(y, gz1)} %`; return v === undefined || v === null ? '' : `<span style="${farbe ? `color:${farbe}` : ''}">${esc(n)} <b>${f(v)}</b></span>`; }).join('');
-  feld.innerHTML = `<div class="tv-l-kopf"><b>${esc(caDaten.ticker)}</b><span>${esc(TV_INTERVALLE.find((x) => x[0] === tv.intervall)[1])}</span><span>${zeit}</span></div>
+  feld.innerHTML = `<div class="tv-l-kopf"><b>${esc(caDaten.ticker)}</b><span>${esc(TV_INTERVALLE.find((x) => x[0] === tv.intervall)[1])}</span><span>${zeit}</span>${tvIntraday() && d.datum.length ? `<span class="tv-l-ab">Kurse ab ${lokal(d.datum[0]).toLocaleDateString('de-DE')} (freie Quelle), ältere und Earnings: ${tv.intervall === '15m' ? '1 Std. oder ' : ''}1 Tag</span>` : ''}</div>
     <div class="tv-l-ohlc">O <b>${caP(d.o[i])}</b> H <b>${caP(d.h[i])}</b> T <b>${caP(d.l[i])}</b> S <b>${caP(d.c[i])}</b> <em class="${klasse(ver)}">${ggVz(ver, gz2)} %</em>${tv.vergleich.length ? (() => { const v0 = (d.c[i] / d.c[tvAnkerIndex()] - 1) * 100; return ` <em class="${klasse(v0)}">seit Start ${ggVz(v0, gz1)} %</em>`; })() : ''}</div>
     <div class="tv-l-werte">${werte}</div>${tv.ueber.trades && tv.tradeInfo?.has(i) ? `<div class="tv-l-trades">${tv.tradeInfo.get(i).map((t) => `<span class="${t.typ}">${t.typ === 'kauf' ? 'Kauf' : 'Verkauf'} ${esc(t.zeit.slice(8, 10))}.${esc(t.zeit.slice(5, 7))}. ${esc(t.zeit.slice(11))} · ${String(+t.stueck.toFixed(4)).replace('.', ',')} Stück · ${euro.format(t.betrag)}${t.preis_eur ? ` · je ${euro.format(t.preis_eur)}` : ''}</span>`).join('')}</div>` : ''}`;
   // Quartalszahlen an dieser Kerze
