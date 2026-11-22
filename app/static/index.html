@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="Vinter">
   <link rel="preload" href="schriften/unbounded-400-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="schriften/manrope-400-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=231">
+  <link rel="stylesheet" href="style.css?v=234">
   <link rel="stylesheet" href="vinter.css?v=1">
 </head>
 <body>
@@ -45,6 +45,7 @@
       <div class="tab-gruppe">
         <p class="tab-titel">Analyse</p>
         <a class="tab" href="#risiko" data-seite="risiko"><span>Risiko</span></a>
+        <a class="tab" href="#vola" data-seite="vola"><span>Volatilität &amp; Gamma</span></a>
         <a class="tab" href="#stresstest" data-seite="stresstest"><span>Szenarien</span></a>
       </div>
       <div class="tab-gruppe">
@@ -1037,6 +1038,13 @@
       <p class="hinweis">Vier Anlagestile („Faktoren“) erklären neben dem Gesamtmarkt einen großen Teil aller Aktienbewegungen: kleine Firmen (iShares Russell 2000, IWM), Momentum, also die Gewinner der letzten Monate (MTUM), günstig bewertete Firmen (VLUE) und solide, profitable Firmen (QUAL). Als Faktor zählt jeweils der Vorsprung dieses ETFs vor dem S&amp;P 500 (SPY) in einer Woche, sonst würden alle vier nur den Markt messen. Vinter rechnet aus den Wochenkursen in Euro eine Regression: Depot bzw. Position gegen den Weltmarkt (MSCI World) und die vier Vorsprünge gleichzeitig. Markt-Beta 1,2 heißt: Steigt der Weltmarkt um 10 %, steigt das Depot im Schnitt um 12 %. Die Zerlegung multipliziert jede dieser Empfindlichkeiten mit der tatsächlichen Bewegung des Faktors in den letzten 52 Wochen; „Rest“ ist alles, was die Stile nicht erklären: deine Aktienauswahl, Firmennachrichten, Glück. Gerechnet mit deinem heutigen Depot, als hättest du es die ganze Zeit gehalten. Die Faktor-ETFs sind US-Fonds: Für europäische Aktien ist die Zuordnung nur eine Annäherung. Blasse Balken: t-Wert unter 2, der Zusammenhang könnte Zufall sein. Vergangenheit, keine Vorhersage und kein Signal.</p>
     </div>
 
+    <div class="seite" id="seite-gamma" hidden>
+      <h1>Gamma-Exposure</h1>
+      <p class="gx-einleitung">Wo sichern sich die Händler (Market Maker) mit Optionen ab, und bremst oder verstärkt das gerade die Kursbewegung? Oben die Antworten in Kurzform, darunter die Zahlen je Strike.</p>
+      <div class="gx-wahl"><div class="filter" id="gx-ticker" role="group" aria-label="Basiswert"></div>
+        <form class="v-suche" id="gx-suche"><input id="gx-suche-feld" class="pv-select" placeholder="US-Ticker, z. B. NVDA" autocomplete="off" aria-label="Anderen US-Wert öffnen"><button type="submit" class="knopf ca-mini">Öffnen</button></form></div>
+      <div id="gx-bereich"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
     <div class="seite" id="seite-vola" hidden>
       <h1>Volatilität</h1>
       <p class="v-fazit" id="v-fazit" aria-live="polite"></p>
@@ -1118,7 +1126,6 @@
         </section>
       </div>
       <div class="v-kennzahlen" id="v-kennzahlen"></div>
-      <div id="gx-bereich"></div>
       <div id="sw-wert"></div>
       <div id="sw-depot"></div>
       <div id="sw-vrp"></div>
@@ -1196,6 +1203,6 @@
   <script src="lib/karte/d3.min.js"></script>
   <script src="lib/karte/topojson-client.min.js"></script>
   <script src="lib/lightweight-charts/lightweight-charts.standalone.production.js"></script>
-  <script src="app.js?v=283"></script>
+  <script src="app.js?v=286"></script>
 </body>
 </html>
