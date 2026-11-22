@@ -80,6 +80,8 @@ def hintergrund_starten():
             print(f"VINTER EINRICHTUNG: Noch kein Konto. Einrichtungscode für das erste (Admin-)Konto: {code}", flush=True)
     # Holt nach US-Börsenschluss die Volatilitätsoberfläche des Tages, solange der Server läuft.
     starte_hintergrund()
+    from .markt.gamma import starte_hintergrund as gamma_hintergrund
+    gamma_hintergrund()
     # Lädt einmal am Tag die großen Datenmengen für "Großes Geld" (S&P-500-Kurse, KGVs, FINRA, 13F).
     starte_grosses_geld()
     # Punkt 29b: "Warum bewegt sich der Markt?" alle 30 Minuten zur Handelszeit und nach Börsenschluss.
@@ -1389,6 +1391,15 @@ def ezb_erwartung():
         return gecacht("ezb:erwartung", 3 * 3600, erwartung)
     except Exception:
         return {"fehler": "Die Zinskurve der EZB ist gerade nicht erreichbar."}
+
+
+@app.get("/api/gamma")
+def gamma_exposure_route(ticker: str = "SPY", modus: str = "monat"):
+    from .markt.gamma import gamma_exposure
+    try:
+        return gamma_exposure(ticker, modus)
+    except Exception:
+        return {"fehler": "Das Gamma-Exposure konnte gerade nicht berechnet werden (Yahoo antwortet nicht?)."}
 
 
 @app.get("/api/volaflaeche")

@@ -6354,8 +6354,181 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches?.('[data-sw]')) e.target.click(); });
 
+// ---- Gamma-Exposure je Strike (Ergänzung zur Volatilitätsoberfläche), Rechnung in app/markt/gamma.py ----
+const GX_MODI = [['0dte', 'Nächster Verfall'], ['woche', '1 Woche'], ['monat', '1 Monat'], ['quartal', '3 Monate']];
+const gxWahl = { modus: 'monat', alle: false };
+try { const m = localStorage.getItem('gxModus'); if (GX_MODI.some(([k]) => k === m)) gxWahl.modus = m; } catch {}
+let gxDaten = null, gxLaeuft = '';
+
+// Dollar-Beträge kurz: 1,2 Mrd. / 380 Mio. / 45 Tsd.
+function gxGeld(v, vz = false) {
+  if (v === null || v === undefined) return '–';
+  const a = Math.abs(v), s = vz ? (v > 0 ? '+' : v < 0 ? '−' : '') : (v < 0 ? '−' : '');
+  if (a >= 1e9) return `${s}${gz1.format(a / 1e9)} Mrd.`;
+  if (a >= 1e6) return `${s}${gz0.format(a / 1e6)} Mio.`;
+  if (a >= 1e3) return `${s}${gz0.format(a / 1e3)} Tsd.`;
+  return `${s}${gz0.format(a)}`;
+}
+const gxStrike = (k) => (k >= 1000 ? gz0.format(k) : k % 1 ? gz2.format(k) : gz0.format(k));
+const gxAlleOderStufen = (d) => (gxWahl.alle ? { weit: 1, schritt: 0 } : gxStufen(d));
+const gxAbstand = (k, kurs) => `${ggVz((k / kurs - 1) * 100, gz1)} %`;
+
+async function gxLaden(ticker = volaWahl.ticker, neu = false) {
+  const schluessel = `${ticker}|${gxWahl.modus}`;
+  if (!neu && gxDaten?.schluessel === schluessel) { gxZeigen(); return; }
+  if (gxLaeuft === schluessel) return;
+  gxLaeuft = schluessel;
+  if (!gxDaten || gxDaten.schluessel !== schluessel) el('gx-bereich').innerHTML = `<section class="karte th-karte"><p class="sekundaer">Gamma-Exposure für ${esc(ticker)} wird gerechnet (Optionsketten von Yahoo, einige Sekunden) …</p></section>`;
+  let d;
+  try { d = await api(`/api/gamma?ticker=${encodeURIComponent(ticker)}&modus=${gxWahl.modus}`); } catch (f) {
+    d = { fehler: f.message === '404' ? 'Der Server läuft noch mit dem alten Stand. Bitte einmal neu starten.' : 'Das Gamma-Exposure konnte nicht geladen werden. Läuft der Server noch?' };
+  }
+  delete antworten[`/api/gamma?ticker=${encodeURIComponent(ticker)}&modus=${gxWahl.modus}`]; // immer frisch fragen, der Server puffert selbst
+  gxLaeuft = '';
+  if (ticker !== volaWahl.ticker || schluessel !== `${volaWahl.ticker}|${gxWahl.modus}`) return;
+  gxDaten = { ...d, schluessel };
+  gxZeigen();
+}
+
+// Regelbasierte Einordnung (keine Kauf- oder Verkaufssignale)
+function gxSaetze(d) {
+  const s = [], k = d.kurs;
+  if (d.flip) {
+    s.push(k >= d.flip
+      ? `Kurs über dem Flip (${gxStrike(d.flip)}): Händler sind hier vermutlich long Gamma. Sie verkaufen in Anstiege und kaufen in Rückgänge, das dämpft die Bewegung.`
+      : `Kurs unter dem Flip (${gxStrike(d.flip)}): Händler sind hier vermutlich short Gamma. Sie müssen mit der Bewegung handeln, das kann Ausschläge verstärken.`);
+  } else s.push(d.netto >= 0 ? 'Netto-Gamma im ganzen Bereich positiv: eher dämpfend.' : 'Netto-Gamma im ganzen Bereich negativ: eher verstärkend.');
+  if (d.call_wall) s.push(`Größtes Call-Gamma über dem Kurs bei ${gxStrike(d.call_wall)} (${gxAbstand(d.call_wall, k)}): Dort ist die Absicherung gegen einen Anstieg am größten, Anstiege laufen dort oft fest.`);
+  if (d.put_wall) s.push(`Größtes Put-Gamma unter dem Kurs bei ${gxStrike(d.put_wall)} (${gxAbstand(d.put_wall, k)}).`);
+  const h = d.heute;
+  if (h && h.call_oi_ueber > 0) {
+    const q = h.call_vol_ueber / h.call_oi_ueber;
+    if (q >= 0.5) s.push(`${d.live ? 'Heute' : 'Am letzten Handelstag'} viel Handel in Calls über dem Kurs (${gz0.format(h.call_vol_ueber)} Kontrakte, ${gz0.format(q * 100)} % des Open Interest). Werden sie gekauft, sichern sich die Händler gegen einen Anstieg ab: Sie kaufen den Basiswert und müssen bei steigendem Kurs nachkaufen.`);
+  }
+  if (d.vor60) {
+    const dc = d.call_gex - d.vor60.call_gex;
+    if (Math.abs(dc) > Math.abs(d.vor60.call_gex) * 0.15) s.push(`Call-Gamma in der letzten Stunde ${dc > 0 ? 'deutlich gestiegen' : 'deutlich gefallen'} (${gxGeld(dc, true)} $).`);
+  }
+  return s;
+}
+
+// Netto-Gamma über gedachte Kurse (±15 %): wo kippt es?
+function gxProfil(d) {
+  const p = d.profil; if (!p?.length) return '';
+  const B = 400, H = 200, L = 8, R = 8, O = 16, U = 22;
+  const xs = p.map((x) => x[0]), ys = p.map((x) => x[1]);
+  const x0 = xs[0], x1 = xs.at(-1), yMax = Math.max(...ys.map(Math.abs)) || 1;
+  const X = (v) => L + (v - x0) / (x1 - x0) * (B - L - R), Y = (v) => O + (1 - (v / yMax + 1) / 2) * (H - O - U);
+  const linie = p.map((q, i) => `${i ? 'L' : 'M'}${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join('');
+  const flaeche = (vz) => `M${X(x0)},${Y(0)}${p.map((q) => `L${X(q[0]).toFixed(1)},${Y(vz > 0 ? Math.max(0, q[1]) : Math.min(0, q[1])).toFixed(1)}`).join('')}L${X(x1)},${Y(0)}Z`;
+  const marke = (v, klasse_, text, oben) => (v >= x0 && v <= x1 ? `<line class="${klasse_}" x1="${X(v)}" x2="${X(v)}" y1="${O}" y2="${H - U}"/><text class="gx-p-text ${klasse_}" x="${X(v)}" y="${oben ? O + 2 : H - 6}" text-anchor="middle">${esc(text)}</text>` : '');
+  return `<figure class="gx-profil"><svg viewBox="0 0 ${B} ${H}" role="img" aria-label="Netto-Gamma über gedachte Kurse">
+    <path class="gx-p-plus" d="${flaeche(1)}"/><path class="gx-p-minus" d="${flaeche(-1)}"/>
+    <line class="gx-p-null" x1="${L}" x2="${B - R}" y1="${Y(0)}" y2="${Y(0)}"/><path class="gx-p-linie" d="${linie}"/>
+    ${marke(d.kurs, 'gx-p-kurs', `Kurs ${gxStrike(d.kurs)}`, false)}${d.flip ? marke(d.flip, 'gx-p-flip', `Flip ${gxStrike(d.flip)}`, true) : ''}
+  </svg><figcaption class="sekundaer">Netto-Gamma, wenn der Kurs woanders stünde (−15 % bis +15 %, gleiche Optionen). Grün: dämpfend, rot: verstärkend.</figcaption></figure>`;
+}
+
+// Strikes in Stufen zusammenfassen, damit Kurs, Flip und beide Walls in rund 30 Zeilen passen
+function gxStufen(d) {
+  const kurs = d.kurs;
+  const weit = Math.min(0.12, Math.max(0.03, ...[d.call_wall, d.put_wall, d.flip].filter(Boolean).map((k) => Math.abs(k / kurs - 1) + 0.01)));
+  const schritt = [0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500].find((s) => (2 * weit * kurs) / s <= 30) ?? 1000;
+  const fein = Math.min(...d.zeilen.slice(1).map((z, i) => z.strike - d.zeilen[i].strike).filter((x) => x > 0), Infinity);
+  return { weit, schritt: schritt <= fein ? 0 : schritt };
+}
+function gxZusammen(liste, schritt) {
+  if (!schritt) return liste;
+  const m = new Map();
+  for (const z of liste) {
+    const k = Math.round(z.strike / schritt) * schritt;
+    const a = m.get(k) ?? { strike: k, call: 0, put: 0, call_oi: 0, put_oi: 0, call_vol: 0, put_vol: 0 };
+    for (const f of ['call', 'put', 'call_oi', 'put_oi', 'call_vol', 'put_vol']) a[f] += z[f] ?? 0;
+    m.set(k, a);
+  }
+  return [...m.values()];
+}
+const gxVorZeilen = (vor, schritt) => {
+  if (!vor?.zeilen) return null;
+  const liste = gxZusammen(Object.entries(vor.zeilen).map(([k, [c, p]]) => ({ strike: Number(k), call: c, put: p })), schritt);
+  return Object.fromEntries(liste.map((z) => [String(z.strike), [z.call, z.put]]));
+};
+
+function gxLeiter(d) {
+  const kurs = d.kurs;
+  const { weit, schritt } = gxAlleOderStufen(d);
+  let zeilen = gxZusammen(d.zeilen, schritt).filter((z) => gxWahl.alle || Math.abs(z.strike / kurs - 1) <= weit + 0.002).sort((a, b) => b.strike - a.strike);
+  const vor15 = gxVorZeilen(d.vor15, schritt), vor60 = gxVorZeilen(d.vor60, schritt);
+  const wand = (k, w) => w && (schritt ? Math.round(w / schritt) * schritt === k : w === k);
+  const max = Math.max(1, ...zeilen.map((z) => Math.max(z.call, z.put)));
+  const diff = (z, seite, vor) => {
+    const alt = vor?.[String(z.strike)];
+    if (!alt) return '<span class="gx-d leer">–</span>';
+    const v = (seite === 'call' ? z.call - alt[0] : z.put - alt[1]);
+    if (Math.abs(v) < max * 0.002) return '<span class="gx-d leer">0</span>';
+    return `<span class="gx-d ${v > 0 ? 'plus' : 'minus'}">${gxGeld(v, true)}</span>`;
+  };
+  let kursDrin = false;
+  const html = zeilen.map((z) => {
+    let vor = '';
+    if (!kursDrin && z.strike < kurs) { kursDrin = true; vor = `<div class="gx-kurs" role="presentation"><span>Kurs ${gxStrike(kurs)}</span></div>`; }
+    const wandKlasse = wand(z.strike, d.call_wall) ? ' call-wall' : wand(z.strike, d.put_wall) ? ' put-wall' : '';
+    const tip = tipAttr(`Strike ${schritt ? `${gxStrike(z.strike - schritt / 2)} bis ${gxStrike(z.strike + schritt / 2)}` : gxStrike(z.strike)} (${gxAbstand(z.strike, kurs)})`, `Calls: Gamma ${gxGeld(z.call)} $ je 1 %, Open Interest ${gz0.format(z.call_oi)}, ${d.live ? 'heute' : 'letzter Handelstag'} ${gz0.format(z.call_vol)} gehandelt`, `Puts: Gamma ${gxGeld(z.put)} $ je 1 %, Open Interest ${gz0.format(z.put_oi)}, ${d.live ? 'heute' : 'letzter Handelstag'} ${gz0.format(z.put_vol)} gehandelt`);
+    return `${vor}<div class="gx-zeile${wandKlasse}" ${tip}>
+      ${diff(z, 'call', vor60)}${diff(z, 'call', vor15)}
+      <span class="gx-balken call"><i style="width:${(z.call / max * 100).toFixed(1)}%"></i></span>
+      <span class="gx-strike">${gxStrike(z.strike)}</span>
+      <span class="gx-balken put"><i style="width:${(z.put / max * 100).toFixed(1)}%"></i></span>
+      ${diff(z, 'put', vor15)}${diff(z, 'put', vor60)}</div>`;
+  }).join('') + (kursDrin ? '' : `<div class="gx-kurs" role="presentation"><span>Kurs ${gxStrike(kurs)}</span></div>`);
+  return `<div class="gx-leiter" role="table" aria-label="Call- und Put-Gamma je Strike">
+    <div class="gx-kopf"><span>1 Std.</span><span>15 Min.</span><span class="gx-k-call">Call-Gamma</span><span>Strike</span><span class="gx-k-put">Put-Gamma</span><span>15 Min.</span><span>1 Std.</span></div>
+    ${html}</div>`;
+}
+
+function gxZeigen() {
+  const box = el('gx-bereich'); if (!box) return;
+  const d = gxDaten;
+  if (!d) { box.innerHTML = ''; return; }
+  const modi = `<div class="filter gx-modi" role="group" aria-label="Welche Verfälle">${GX_MODI.map(([k, n]) => `<button type="button" data-gx-modus="${k}" aria-pressed="${gxWahl.modus === k}">${n}</button>`).join('')}</div>`;
+  const info = [
+    ['Was es zeigt', 'Wie viel Dollar Händler (Market Maker) im Basiswert kaufen oder verkaufen müssen, um abgesichert zu bleiben, wenn sich der Kurs um 1 % bewegt. Links Calls, rechts Puts, je Strike. Große Balken = dort ist viel Absicherung nötig.'],
+    ['Rechnung', 'Je Option: Gamma (Black-Scholes, implizite Volatilität aus dem Mittelkurs) × Open Interest × 100 × Kurs² × 1 %. Annahme wie bei den üblichen GEX-Seiten: Händler halten Calls long und Puts short, Calls zählen positiv, Puts negativ. Das stimmt nicht immer, deshalb ist auch das heutige Volumen angegeben.'],
+    ['Flip', 'Der Kurs, an dem das Netto-Gamma das Vorzeichen wechselt. Darüber dämpfen die Händler Bewegungen meist, darunter verstärken sie sie eher.'],
+    ['Absicherung gegen einen Anstieg', 'Kaufen Kunden viele Calls über dem Kurs, haben die Händler diese verkauft und sichern sich ab, indem sie den Basiswert kaufen. Steigt der Kurs, müssen sie nachkaufen (Gamma-Squeeze). Erkennbar an hohem Call-Volumen im Vergleich zum Open Interest und an wachsendem Call-Gamma über dem Kurs.'],
+    ['15 Min. und 1 Std.', 'Veränderung gegenüber einem gespeicherten Stand. Open Interest meldet die Börse nur einmal am Tag, die Veränderung kommt daher aus Kurs, Volatilität und Restlaufzeit. Stände gibt es nur zur US-Handelszeit: für SPY, QQQ und gerade angesehene Werte alle 15 Minuten.'],
+    ['Quelle', 'Optionsketten von Yahoo Finance, etwa 15 Minuten verzögert, kostenlos. Kein Kauf- oder Verkaufssignal.'],
+  ];
+  if (d.fehler) { box.innerHTML = ggKarte('gx-karte', `Gamma-Exposure ${d.ticker ?? volaWahl.ticker}`, info, `${modi}${ggFehler(d)}`); return; }
+  const stand = `${esc(d.ticker)} ${dollar.format(d.kurs)} · ${d.live ? '<span class="v-live">Live</span> ' : ''}Stand ${new Date(d.zeit).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr · Yahoo, etwa 15 Min. verzögert · ${d.verfaelle.length} ${d.verfaelle.length === 1 ? `Verfall (${datumDe(d.verfaelle[0])})` : `Verfälle bis ${datumDe(d.verfaelle.at(-1))}`} · ${gz0.format(d.optionen)} Optionen`;
+  const kz = (titel, wert, text, k = '') => `<div class="gx-kz"><span>${titel}</span><b class="${k}">${wert}</b><small>${text}</small></div>`;
+  const h = d.heute ?? {};
+  const kennzahlen = `<div class="gx-kennzahlen">
+    ${kz('Call-Gamma', `${gxGeld(d.call_gex)} $`, d.vor60 ? `1 Std.: ${gxGeld(d.call_gex - d.vor60.call_gex, true)}` : 'je 1 % Bewegung', 'plus')}
+    ${kz('Put-Gamma', `${gxGeld(d.put_gex)} $`, d.vor60 ? `1 Std.: ${gxGeld(d.put_gex - d.vor60.put_gex, true)}` : 'je 1 % Bewegung', 'minus')}
+    ${kz('Netto', `${gxGeld(d.netto, true)} $`, d.netto >= 0 ? 'eher dämpfend' : 'eher verstärkend', d.netto >= 0 ? 'plus' : 'minus')}
+    ${kz('Flip', d.flip ? gxStrike(d.flip) : '–', d.flip ? gxAbstand(d.flip, d.kurs) + ' zum Kurs' : 'kein Wechsel ±15 %')}
+    ${kz('Call Wall', d.call_wall ? gxStrike(d.call_wall) : '–', d.call_wall ? gxAbstand(d.call_wall, d.kurs) : '')}
+    ${kz('Put Wall', d.put_wall ? gxStrike(d.put_wall) : '–', d.put_wall ? gxAbstand(d.put_wall, d.kurs) : '')}
+    ${kz(`Calls ${d.live ? 'heute' : 'zuletzt'} über Kurs`, gz0.format(h.call_vol_ueber ?? 0), h.call_oi_ueber ? `${gz0.format(h.call_vol_ueber / h.call_oi_ueber * 100)} % des Open Interest` : '')}
+    ${kz(`Puts ${d.live ? 'heute' : 'zuletzt'} unter Kurs`, gz0.format(h.put_vol_unter ?? 0), h.put_oi_unter ? `${gz0.format(h.put_vol_unter / h.put_oi_unter * 100)} % des Open Interest` : '')}
+  </div>`;
+  const saetze = `<ul class="gx-saetze">${gxSaetze(d).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  const fuss = `<p class="gx-fuss sekundaer">${d.vor15 || d.vor60 ? '' : 'Spalten 15 Min. und 1 Std. füllen sich zur US-Handelszeit. '}${!gxWahl.alle && gxStufen(d).schritt ? `Strikes in Stufen von ${gxStrike(gxStufen(d).schritt)} zusammengefasst. ` : ''}<button type="button" class="knopf ca-mini" data-gx-alle>${gxWahl.alle ? 'Nur um den Kurs' : `Alle ${d.zeilen.length} Strikes einzeln`}</button></p>`;
+  box.innerHTML = ggKarte('gx-karte', `Gamma-Exposure ${d.ticker}`, info, `${modi}${kennzahlen}${saetze}<div class="gx-raster">${gxLeiter(d)}${gxProfil(d)}</div>${fuss}`, stand);
+}
+
+document.addEventListener('click', (e) => {
+  const m = e.target.closest('[data-gx-modus]');
+  if (m) { gxWahl.modus = m.dataset.gxModus; try { localStorage.setItem('gxModus', gxWahl.modus); } catch {} gxLaden(volaWahl.ticker); return; }
+  if (e.target.closest('[data-gx-alle]')) { gxWahl.alle = !gxWahl.alle; gxZeigen(); }
+});
+// Live: alle 5 Minuten neu fragen, solange die Seite offen ist (der Server rechnet höchstens alle 10 Minuten neu)
+setInterval(() => { if (gxDaten?.live && !el('seite-vola').hidden && !document.hidden) gxLaden(volaWahl.ticker, true); }, 5 * 60 * 1000);
+
 async function ladeVola(ticker = volaWahl.ticker, neu = false) {
   if (swTicker !== ticker) swLaden(ticker);
+  gxLaden(ticker, neu);
   swDepotLaden();
   vrpLaden();
   if (neu) { delete volaDaten[ticker]; delete antworten[`/api/volaflaeche?ticker=${encodeURIComponent(ticker)}`]; }
@@ -6854,6 +7027,15 @@ const tafelZeit = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-
 const balken = (anteil, art = '') => `<span class="tf-balken ${art}"><i style="width:${Math.max(2, Math.min(100, anteil * 100)).toFixed(1)}%"></i></span>`;
 
 const KACHELN = {
+  gamma: {
+    titel: 'Gamma-Exposure SPY', ziel: '#vola', min: [3, 2], std: [4, 2],
+    async zeige(box) {
+      const d = await tafelApi('/api/gamma?ticker=SPY&modus=monat');
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const ueber = d.flip && d.kurs >= d.flip;
+      box.innerHTML = `<p class="tf-zahl ${d.netto >= 0 ? 'plus' : 'minus'}">${gxGeld(d.netto, true)} $</p><p class="tf-unter">Netto-Gamma je 1 %, ${d.netto >= 0 ? 'eher dämpfend' : 'eher verstärkend'} · Kurs ${gxStrike(d.kurs)}${d.flip ? `, Flip ${gxStrike(d.flip)} (${ueber ? 'darüber' : 'darunter'})` : ''} · Call Wall ${d.call_wall ? gxStrike(d.call_wall) : '–'}, Put Wall ${d.put_wall ? gxStrike(d.put_wall) : '–'} · Yahoo, Stand ${tafelZeit(d.zeit)} Uhr</p>`;
+    },
+  },
   ezbpfad: {
     titel: 'EZB-Zinspfad', ziel: '#prognosen', min: [3, 2], std: [3, 2],
     async zeige(box) {
