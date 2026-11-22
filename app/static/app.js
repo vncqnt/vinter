@@ -12675,7 +12675,7 @@ function tvAufbauen(neueDaten = false) {
     grid: { vertLines: { color: linie }, horzLines: { color: linie } },
     crosshair: { mode: tv.magnet ? 1 : 0 },
     rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: tv.ind.volumen ? 0.14 : 0.06 } },
-    timeScale: { borderVisible: false, timeVisible: tvIntraday(), secondsVisible: false, rightOffset: 12, minBarSpacing: 0.5, fixRightEdge: false },
+    timeScale: { borderVisible: false, timeVisible: tvIntraday(), secondsVisible: false, rightOffset: 12, minBarSpacing: 0.5, fixLeftEdge: true, fixRightEdge: false },
     localization: { locale: 'de-DE', priceFormatter: (p) => (tv.vergleich.length ? `${p > 0 ? '+' : p < 0 ? '−' : ''}${gz1.format(Math.abs(p))} %` : caP(p)), percentageFormatter: (p) => `${gz2.format(p)} %` },
   });
   const o = d.o, h = d.h, l = d.l, c = d.c;
