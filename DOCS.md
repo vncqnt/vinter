@@ -20,6 +20,7 @@ Du brauchst als Admin nur drei Dinge zu tun: **einmal installieren**, **ab und z
 6. Nach der Installation im Reiter **Info**:
    - **Beim Booten starten**: an
    - **Watchdog**: an (startet Vinter neu, falls es abstürzt)
+   - **Automatisch aktualisieren** (Auto-Update): an. Dann kommen neue Versionen von selbst, ohne dass du etwas klicken musst.
    - **In Seitenleiste anzeigen**: aus lassen
 7. **Starten** klicken.
 8. Reiter **Protokoll** öffnen und ca. 1 Minute warten, dann auf **Aktualisieren**. Dort steht eine Zeile wie:
@@ -44,7 +45,9 @@ Das Einspielen löscht nichts: Was am NUC schon gespeichert ist, bleibt, ersetzt
 
 ## 2. Updates
 
-Wenn dein Sohn eine neue Version veröffentlicht hat:
+Ist **Automatisch aktualisieren** an (siehe oben), musst du nichts tun: Home Assistant schaut regelmäßig nach und spielt neue Versionen selbst ein.
+
+Willst du ein Update sofort holen (oder ist die automatische Aktualisierung aus):
 
 1. **Einstellungen → Add-ons → Add-on-Store → drei Punkte → Nach Updates suchen**.
 2. Bei **Vinter** erscheint **Aktualisieren**. Klicken und warten (wieder einige Minuten Bauzeit).
