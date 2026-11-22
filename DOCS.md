@@ -31,6 +31,15 @@ Du brauchst als Admin nur drei Dinge zu tun: **einmal installieren**, **ab und z
 
 Fertig. Mehr musst du für die Einrichtung nicht tun.
 
+### Danach (macht dein Sohn): Daten vom PC übernehmen
+
+1. Mit dem Einrichtungscode das Admin-Konto anlegen.
+2. Am PC in Vinter: **Einstellungen → Umzug auf den NUC → Umzugsdatei herunterladen**.
+3. Am NUC in Vinter: **Einstellungen → Umzug auf den NUC**, die Datei auswählen, **Einspielen**.
+4. Am NUC unter **Keys und Einstellungen** die Keys neu eintragen (sie ziehen bewusst nicht mit um).
+
+Das Einspielen löscht nichts: Was am NUC schon gespeichert ist, bleibt, ersetzte Dateien kommen vorher in eine Sicherung.
+
 ---
 
 ## 2. Updates
