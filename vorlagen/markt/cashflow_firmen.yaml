@@ -1,0 +1,11 @@
+# Große Firmen je Sektor für die Seite "Cashflow". Nur US-Firmen (Zahlen aus der SEC-Datenbank).
+# Du kannst Sektoren und Ticker frei ändern. Banken und Versicherer passen nicht (Free Cashflow ist dort kaum aussagekräftig).
+Hyperscaler & Cloud: [MSFT, AMZN, GOOGL, META, ORCL]
+Halbleiter: [NVDA, AVGO, AMD, MU, QCOM, INTC]
+Software: [CRM, ADBE, NOW, INTU, PLTR]
+Hardware & Konsum-Tech: [AAPL, TSLA, NFLX]
+Konsum: [WMT, COST, PG, KO, MCD, NKE]
+Gesundheit: [LLY, UNH, JNJ, ABBV, MRK]
+Energie: [CVX, EOG, SLB, OXY]
+Industrie & Rüstung: [GE, CAT, RTX, LMT, HON, GEV]
+Versorger & Strom: [VST, CEG, SO, DUK]

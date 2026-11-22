@@ -1,0 +1,22 @@
+# Geheimnisse: niemals ins Repo
+.env
+.env.*
+options.json
+
+# Das Datenverzeichnis: persönliche Daten (benutzer/), Zwischenspeicher (cache/) und deine
+# bearbeiteten Markt-Dateien. Mitgelieferte Startdateien liegen stattdessen in vorlagen/.
+daten/
+
+# Persönliche Exporte und Datenbanken, egal wo sie liegen
+*.csv
+*.sqlite
+*.sqlite-journal
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Screenshots und Bilder im Hauptordner (Vorlagen liegen in design/)
+/*.jpg
+/*.png

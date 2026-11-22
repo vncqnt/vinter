@@ -1,0 +1,45 @@
+# Warengruppen für Filter, Frühindikatoren und Thesen (Punkt 31b).
+# hs: HS-Codes (2, 4 oder 6 Stellen), gelten für UN Comtrade und Census.
+# china: Namen der Hauptwaren in den englischen Tabellen des chinesischen Zolls (Anfang des Namens genügt).
+# Die gewählten Codes sind seit HS 2012 unverändert; bei einer neuen HS-Version hier prüfen.
+
+halbleiter:
+  name: Halbleiter
+  hs: ["8542", "8541", "8486"]
+  hinweis: "8542 Chips, 8541 Dioden/Transistoren/Solarzellen, 8486 Maschinen für die Chipherstellung"
+  china: ["Electronic integrated circuits", "Integrated"]  # bis 2025 hieß es "Integrated circuits"
+
+seltene_erden:
+  name: Seltene Erden
+  hs: ["280530", "2846", "850511"]
+  hinweis: "Metalle der Seltenen Erden, ihre Verbindungen und Dauermagnete aus Metall"
+  china: ["Rare-earth", "Rare earth"]
+
+rohoel:
+  name: Rohöl
+  hs: ["2709"]
+  china: ["Crude"]
+
+fluessiggas:
+  name: Flüssiggas
+  hs: ["271111"]
+  hinweis: "Beim chinesischen Zoll nur als Erdgas insgesamt (auch Pipeline)"
+  china: ["Natural gas"]
+
+kupfer:
+  name: Kupfer
+  hs: ["2603", "7402", "7403"]
+  hinweis: "Erz und Konzentrat, Rohkupfer, raffiniertes Kupfer"
+  china: ["Copper ore", "Unwrought copper"]
+
+fahrzeuge:
+  name: Fahrzeuge
+  hs: ["8703"]
+  hinweis: "Pkw; beim chinesischen Zoll Kraftfahrzeuge mit Fahrgestellen"
+  china: ["Motor vehicles"]
+
+ruestung:
+  name: Rüstungsgüter
+  hs: ["93", "8710"]
+  hinweis: "Waffen und Munition, Panzer. Viele Rüstungsexporte laufen über Regierungsverträge und fehlen in der Zollstatistik"
+  china: []

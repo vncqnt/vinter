@@ -1,0 +1,18 @@
+# Makro-Termine. Quellen: bls.gov/schedule, federalreserve.gov (FOMC-Kalender), ecb.europa.eu.
+# Uhrzeiten sind deutsche Zeit und stehen immer in Anführungszeichen.
+# Trage bei "erwartung" und "tatsaechlich" einfach deine Werte ein, z. B. tatsaechlich: "3,1 %".
+# wichtigkeit: hoch oder mittel
+
+- {datum: 2026-11-06, uhrzeit: "14:30", name: "US-Arbeitsmarktbericht (Okt.)", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2026-11-10, uhrzeit: "14:30", name: "US-Inflation CPI (Okt.)", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2026-11-13, uhrzeit: "14:30", name: "US-Erzeugerpreise PPI (Okt.)", wichtigkeit: mittel, erwartung: null, tatsaechlich: null}
+- {datum: 2026-12-04, uhrzeit: "14:30", name: "US-Arbeitsmarktbericht (Nov.)", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2026-12-09, uhrzeit: "20:00", name: "Fed-Zinsentscheid", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2026-12-10, uhrzeit: "14:30", name: "US-Inflation CPI (Nov.)", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2026-12-15, uhrzeit: "14:30", name: "US-Erzeugerpreise PPI (Nov.)", wichtigkeit: mittel, erwartung: null, tatsaechlich: null}
+- {datum: 2026-12-17, uhrzeit: "14:15", name: "EZB-Zinsentscheid", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2027-01-08, uhrzeit: "14:30", name: "US-Arbeitsmarktbericht (Dez.)", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2027-01-13, uhrzeit: "14:30", name: "US-Inflation CPI (Dez.)", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2027-01-14, uhrzeit: "14:30", name: "US-Erzeugerpreise PPI (Dez.)", wichtigkeit: mittel, erwartung: null, tatsaechlich: null}
+- {datum: 2027-01-27, uhrzeit: "20:00", name: "Fed-Zinsentscheid (vorläufig)", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}
+- {datum: 2027-02-04, uhrzeit: "14:15", name: "EZB-Zinsentscheid", wichtigkeit: hoch, erwartung: null, tatsaechlich: null}

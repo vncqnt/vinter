@@ -1,0 +1,46 @@
+# Weltkarte, Ebene "Märkte": welches Land mit welchem Leitindex eingefärbt wird.
+# land: Ländernummer nach ISO 3166 (numerisch, so heißen die Länder in der Kartendatei), z. B. 276 = Deutschland
+# ticker: Yahoo-Ticker des Index · zone: Zeitzone der Börse · auf/zu: Handelszeit in Ortszeit
+# Länder ohne Eintrag bleiben grau. Eine Zeile löschen oder ergänzen genügt.
+
+indizes:
+  - {land: 840, name: USA, index: S&P 500, ticker: "^GSPC", zone: America/New_York, auf: "09:30", zu: "16:00"}
+  - {land: 124, name: Kanada, index: S&P/TSX, ticker: "^GSPTSE", zone: America/Toronto, auf: "09:30", zu: "16:00"}
+  - {land: 484, name: Mexiko, index: IPC, ticker: "^MXX", zone: America/Mexico_City, auf: "08:30", zu: "15:00"}
+  - {land: 76, name: Brasilien, index: Bovespa, ticker: "^BVSP", zone: America/Sao_Paulo, auf: "10:00", zu: "17:00"}
+  - {land: 276, name: Deutschland, index: DAX, ticker: "^GDAXI", zone: Europe/Berlin, auf: "09:00", zu: "17:30"}
+  - {land: 250, name: Frankreich, index: CAC 40, ticker: "^FCHI", zone: Europe/Paris, auf: "09:00", zu: "17:30"}
+  - {land: 826, name: Großbritannien, index: FTSE 100, ticker: "^FTSE", zone: Europe/London, auf: "08:00", zu: "16:30"}
+  - {land: 724, name: Spanien, index: IBEX 35, ticker: "^IBEX", zone: Europe/Madrid, auf: "09:00", zu: "17:30"}
+  - {land: 380, name: Italien, index: FTSE MIB, ticker: "FTSEMIB.MI", zone: Europe/Rome, auf: "09:00", zu: "17:30"}
+  - {land: 528, name: Niederlande, index: AEX, ticker: "^AEX", zone: Europe/Amsterdam, auf: "09:00", zu: "17:30"}
+  - {land: 56, name: Belgien, index: BEL 20, ticker: "^BFX", zone: Europe/Brussels, auf: "09:00", zu: "17:30"}
+  - {land: 756, name: Schweiz, index: SMI, ticker: "^SSMI", zone: Europe/Zurich, auf: "09:00", zu: "17:30"}
+  - {land: 40, name: Österreich, index: ATX, ticker: "^ATX", zone: Europe/Vienna, auf: "09:00", zu: "17:30"}
+  - {land: 752, name: Schweden, index: OMX Stockholm 30, ticker: "^OMX", zone: Europe/Stockholm, auf: "09:00", zu: "17:30"}
+  - {land: 578, name: Norwegen, index: OBX, ticker: "OBX.OL", zone: Europe/Oslo, auf: "09:00", zu: "16:20"}
+  - {land: 208, name: Dänemark, index: OMX Kopenhagen 25, ticker: "^OMXC25", zone: Europe/Copenhagen, auf: "09:00", zu: "17:00"}
+  - {land: 246, name: Finnland, index: OMX Helsinki 25, ticker: "^OMXH25", zone: Europe/Helsinki, auf: "10:00", zu: "18:30"}
+  - {land: 620, name: Portugal, index: PSI, ticker: "PSI20.LS", zone: Europe/Lisbon, auf: "08:00", zu: "16:30"}
+  - {land: 300, name: Griechenland, index: Athex Composite, ticker: "GD.AT", zone: Europe/Athens, auf: "10:00", zu: "17:20"}
+  - {land: 616, name: Polen, index: WIG20, ticker: "WIG20.WA", zone: Europe/Warsaw, auf: "09:00", zu: "17:00"}
+  - {land: 348, name: Ungarn, index: BUX, ticker: "^BUX.BD", zone: Europe/Budapest, auf: "09:00", zu: "17:00"}
+  - {land: 792, name: Türkei, index: BIST 100, ticker: "XU100.IS", zone: Europe/Istanbul, auf: "10:00", zu: "18:00"}
+  - {land: 376, name: Israel, index: TA-35, ticker: "TA35.TA", zone: Asia/Jerusalem, auf: "09:59", zu: "17:25"}
+  - {land: 682, name: Saudi-Arabien, index: Tadawul, ticker: "^TASI.SR", zone: Asia/Riyadh, auf: "10:00", zu: "15:00", tage: [6, 0, 1, 2, 3]}
+  - {land: 784, name: Vereinigte Arabische Emirate, index: DFM, ticker: "DFMGI.AE", zone: Asia/Dubai, auf: "10:00", zu: "15:00"}
+  - {land: 818, name: Ägypten, index: EGX 30, ticker: "^CASE30", zone: Africa/Cairo, auf: "10:00", zu: "14:30", tage: [6, 0, 1, 2, 3]}
+  - {land: 710, name: Südafrika, index: JSE Top 40, ticker: "^J203.JO", zone: Africa/Johannesburg, auf: "09:00", zu: "17:00"}
+  - {land: 392, name: Japan, index: Nikkei 225, ticker: "^N225", zone: Asia/Tokyo, auf: "09:00", zu: "15:30"}
+  - {land: 344, name: Hongkong, index: Hang Seng, ticker: "^HSI", zone: Asia/Hong_Kong, auf: "09:30", zu: "16:00"}
+  - {land: 156, name: China, index: Shanghai Composite, ticker: "000001.SS", zone: Asia/Shanghai, auf: "09:30", zu: "15:00"}
+  - {land: 410, name: Südkorea, index: KOSPI, ticker: "^KS11", zone: Asia/Seoul, auf: "09:00", zu: "15:30"}
+  - {land: 158, name: Taiwan, index: TAIEX, ticker: "^TWII", zone: Asia/Taipei, auf: "09:00", zu: "13:30"}
+  - {land: 356, name: Indien, index: Sensex, ticker: "^BSESN", zone: Asia/Kolkata, auf: "09:15", zu: "15:30"}
+  - {land: 702, name: Singapur, index: Straits Times, ticker: "^STI", zone: Asia/Singapore, auf: "09:00", zu: "17:00"}
+  - {land: 360, name: Indonesien, index: Jakarta Composite, ticker: "^JKSE", zone: Asia/Jakarta, auf: "09:00", zu: "16:00"}
+  - {land: 458, name: Malaysia, index: KLCI, ticker: "^KLSE", zone: Asia/Kuala_Lumpur, auf: "09:00", zu: "17:00"}
+  - {land: 764, name: Thailand, index: SET, ticker: "^SET.BK", zone: Asia/Bangkok, auf: "10:00", zu: "16:30"}
+  - {land: 608, name: Philippinen, index: PSEi, ticker: "PSEI.PS", zone: Asia/Manila, auf: "09:30", zu: "15:00"}
+  - {land: 36, name: Australien, index: ASX 200, ticker: "^AXJO", zone: Australia/Sydney, auf: "10:00", zu: "16:00"}
+  - {land: 554, name: Neuseeland, index: NZX 50, ticker: "^NZ50", zone: Pacific/Auckland, auf: "10:00", zu: "16:45"}

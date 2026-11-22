@@ -1,0 +1,309 @@
+/* ===== Stil "Vinter" (nach dem Unslop-Durchgang, 16.11.2026) =====
+   Gilt, solange <html data-stil="vinter"> gesetzt ist. Zurück zum alten Stil: data-stil="bank".
+
+   Richtung
+   Produkt:   persönliches Börsen-Terminal für ein kleines Trade-Republic-Depot, liest und rechnet nur
+   Charakter: wach, genau, ein bisschen nächtlich
+   Welt:      Anzeigetafeln im Börsensaal, LED-Laufschriften
+   Momente:   das Punktraster aus echten Daten (Startseite) und der Gewinn-und-Verlust-Chart
+   Zeichen:   ein kleiner runder LED-Punkt vor allem, was gerade live ist
+
+   Schriften: Unbounded (Wortmarke und Titel), Manrope (Text), Space Mono (Zahlen und Uhrzeiten).
+   Die ruhige Oberfläche bleibt neutral; Farbe tragen nur die Daten. */
+
+@font-face { font-family: "Unbounded"; src: url("schriften/unbounded-400-700.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Manrope"; src: url("schriften/manrope-400-700.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Space Mono"; src: url("schriften/space-mono-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Space Mono"; src: url("schriften/space-mono-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+
+/* ---- Farben: eine neutrale Reihe, leicht grünlich getönt, eine Akzentfarbe ---- */
+:root[data-stil="vinter"] {
+  --titel-schrift: "Unbounded", "Manrope", sans-serif;
+  --text-schrift: "Manrope", -apple-system, "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --zahl-schrift: "Space Mono", ui-monospace, "Cascadia Mono", monospace;
+  --kurve: cubic-bezier(.22, 1, .36, 1);
+}
+/* Die Flächen bleiben an jedem Tag gleich. Ob das Depot im Plus oder Minus ist, zeigen die Zahlen
+   und das Punktraster, nicht die ganze Oberfläche. */
+:root[data-stil="vinter"]:not([data-theme="light"]) body,
+:root[data-stil="vinter"]:not([data-theme="light"]) body.tag-plus,
+:root[data-stil="vinter"]:not([data-theme="light"]) body.tag-minus,
+:root[data-stil="vinter"]:not([data-theme="light"]) body.tag-neutral {
+  --grund: #0b0d0c;
+  --karte: #121514;
+  --karte-fest: #161a18;
+  --flaeche-hoch: #1b201e;
+  --text: #e8ece9;
+  --grau: #9aa39e;
+  --leise: #6c7570;
+  --linie: rgba(232, 236, 233, .08);
+  --leiste: rgba(11, 13, 12, .78);
+  --akzent: #7ee3ad;
+  --akzent-flaeche: rgba(126, 227, 173, .1);
+  --pille: #e8ece9;
+  --pille-text: #0b0d0c;
+  --marke-farbe: #e8ece9;
+}
+:root[data-stil="vinter"][data-theme="light"] body,
+:root[data-stil="vinter"][data-theme="light"] body.tag-plus,
+:root[data-stil="vinter"][data-theme="light"] body.tag-minus,
+:root[data-stil="vinter"][data-theme="light"] body.tag-neutral {
+  --grund: #f3f5f3;
+  --karte: #ffffff;
+  --karte-fest: #ffffff;
+  --flaeche-hoch: #eceeec;
+  --text: #121614;
+  --grau: #56605a;
+  --leise: #7d8781;
+  --linie: rgba(18, 22, 20, .1);
+  --leiste: rgba(243, 245, 243, .82);
+  --akzent: #1f8c56;
+  --akzent-flaeche: rgba(31, 140, 86, .1);
+  --pille: #121614;
+  --pille-text: #f3f5f3;
+  --marke-farbe: #121614;
+}
+
+/* ---- Hintergrund: keine Farbwolken mehr, nur der Grund und das Punktraster ---- */
+:root[data-stil="vinter"] body,
+:root[data-stil="vinter"] body.auf-home { background: var(--grund); font-family: var(--text-schrift); }
+:root[data-stil="vinter"] body::before,
+:root[data-stil="vinter"] body.auf-home::before { display: none; }
+:root[data-stil="vinter"] #lava { filter: none; opacity: .55; transition: opacity .4s var(--kurve); }
+:root[data-stil="vinter"] body.auf-home #lava { opacity: 1; }
+:root[data-stil="vinter"][data-theme="light"] #lava { opacity: .5; }
+:root[data-stil="vinter"][data-theme="light"] body.auf-home #lava { opacity: .9; }
+
+/* ---- Flächen: ruhig und fest statt Milchglas, Tiefe aus Flächenstufen und Haarlinien ---- */
+:root[data-stil="vinter"] .karte,
+:root[data-stil="vinter"] .kachel,
+:root[data-stil="vinter"] .m-karte,
+:root[data-stil="vinter"] .sektor-panel,
+:root[data-stil="vinter"] .meldung {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  box-shadow: none;
+}
+:root[data-stil="vinter"] .karte { border-radius: 16px; }
+
+/* ---- Schrift ---- */
+:root[data-stil="vinter"] .wortmarke {
+  font-family: var(--titel-schrift);
+  font-size: clamp(3.5rem, 11vw, 7.5rem);
+  font-weight: 600;
+  letter-spacing: -.03em;
+  line-height: 1;
+  color: var(--marke-farbe);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  filter: none;
+}
+:root[data-stil="vinter"] .leiste-titel { font-family: var(--titel-schrift); font-size: 1.25rem; font-weight: 600; letter-spacing: -.02em; color: var(--text); }
+:root[data-stil="vinter"] .tag-plus .leiste-titel, :root[data-stil="vinter"] .tag-minus .leiste-titel,
+:root[data-stil="vinter"] .tag-plus .wortmarke, :root[data-stil="vinter"] .tag-minus .wortmarke { color: var(--marke-farbe); }
+:root[data-stil="vinter"] h1, :root[data-stil="vinter"] .abschnitt {
+  font-family: var(--titel-schrift);
+  font-size: clamp(1.75rem, 3.4vw, 2.25rem);
+  font-weight: 500;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+}
+:root[data-stil="vinter"] .m-gruppe > h2, :root[data-stil="vinter"] .woche h2,
+:root[data-stil="vinter"] .karte h2.these-name, :root[data-stil="vinter"] .th-kopf h2,
+:root[data-stil="vinter"] .karte .th-kopf h2 {
+  font-family: var(--titel-schrift);
+  font-size: 1.0625rem;
+  font-weight: 500;
+  letter-spacing: -.01em;
+  line-height: 1.3;
+  text-transform: none;
+}
+/* Kleine Beschriftungen: normale Schreibweise statt Versalien mit Sperrung */
+:root[data-stil="vinter"] .karte > h2:not(.these-name), :root[data-stil="vinter"] a.karte > h2,
+:root[data-stil="vinter"] .tab-titel, :root[data-stil="vinter"] .n-tag, :root[data-stil="vinter"] .xl-gruppe,
+:root[data-stil="vinter"] .v-muster-gruppe > h3, :root[data-stil="vinter"] .ww-kopf, :root[data-stil="vinter"] .em-kopf,
+:root[data-stil="vinter"] .pg-unter, :root[data-stil="vinter"] .pg-kopf, :root[data-stil="vinter"] .pg-tabkopf,
+:root[data-stil="vinter"] .pg-block h3, :root[data-stil="vinter"] .r-kopf span:last-child {
+  font-family: var(--text-schrift);
+  font-size: .8125rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--grau);
+}
+:root[data-stil="vinter"] .n-wichtig { font-size: .75rem; font-weight: 600; letter-spacing: 0; text-transform: none; }
+/* Zahlen und Uhrzeiten in der Tafel-Schrift, sauber untereinander */
+:root[data-stil="vinter"] .tf-zahl, :root[data-stil="vinter"] .tf-ecke, :root[data-stil="vinter"] .kennzahl, :root[data-stil="vinter"] .k-wert, :root[data-stil="vinter"] .n-zeit,
+:root[data-stil="vinter"] .th-wert, :root[data-stil="vinter"] .pg-t-wert, :root[data-stil="vinter"] .pg-wkeit b,
+:root[data-stil="vinter"] .ww-reihe > span:not(:first-child), :root[data-stil="vinter"] .em-zeile > span:nth-child(n+3),
+:root[data-stil="vinter"] .reihe > span:last-child, :root[data-stil="vinter"] .pg-haupt b, :root[data-stil="vinter"] .kopf-item:not(.kopf-titel) b {
+  font-family: var(--zahl-schrift);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+:root[data-stil="vinter"] .kennzahl { font-weight: 400; letter-spacing: -.02em; }
+:root[data-stil="vinter"] .k-wert { font-size: 1.375rem; font-weight: 400; }
+/* Fettdruck sparsam: Ordnung entsteht über Größe und Farbe */
+:root[data-stil="vinter"] .kachel b, :root[data-stil="vinter"] .reihe-name, :root[data-stil="vinter"] .name,
+:root[data-stil="vinter"] .karte h2.these-name, :root[data-stil="vinter"] .r-kopf b { font-weight: 600; }
+:root[data-stil="vinter"] .kachel b { font-size: .9375rem; letter-spacing: 0; }
+
+/* ---- Startseite: Kacheln ohne Nummern ---- */
+:root[data-stil="vinter"] .k-nr { display: none; }
+:root[data-stil="vinter"] .kachel { min-height: 7.5rem; padding: 16px 20px; border-radius: 16px; }
+
+/* ---- Formen: Steuerelemente 8 bis 10 px, keine Pille für alles ---- */
+:root[data-stil="vinter"] .filter { border-radius: 12px; background: var(--karte); border: 1px solid var(--linie); padding: 3px; }
+:root[data-stil="vinter"] .filter button { border-radius: 9px; }
+:root[data-stil="vinter"] .filter .pille { border-radius: 9px; }
+:root[data-stil="vinter"] .knopf { border-radius: 10px; }
+:root[data-stil="vinter"] .mehr, :root[data-stil="vinter"] .gesamt-knopf { border-radius: 10px; }
+
+/* ---- Erkennungszeichen: der LED-Punkt vor allem, was live ist ---- */
+:root[data-stil="vinter"] .led::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--akzent);
+  box-shadow: 0 0 0 2px var(--akzent-flaeche);
+  vertical-align: .1em;
+}
+:root[data-stil="vinter"] .r-live { padding: 0; background: none; color: var(--akzent); font-size: .75rem; font-weight: 600; letter-spacing: 0; animation: none; }
+:root[data-stil="vinter"] .r-live::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--akzent); box-shadow: 0 0 0 2px var(--akzent-flaeche); vertical-align: .1em; }
+:root[data-stil="vinter"] .r-auftritt.live { box-shadow: none; border-color: color-mix(in srgb, var(--akzent) 35%, transparent); }
+
+/* ---- Startseite: der Tagesverlauf als LED-Tafel unter dem Satz zum Depot ---- */
+:root[data-stil="vinter"] .led-tafel { display: block; width: min(100%, 44rem); height: 96px; margin: 24px auto 0; }
+:root:not([data-stil="vinter"]) .led-tafel { display: none; }
+
+/* ---- Bewegung: eine Kurve, kurze Zeiten ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-stil="vinter"] #lava { transition: none; }
+}
+
+/* Auswahlfelder wie die Knöpfe */
+:root[data-stil="vinter"] select, :root[data-stil="vinter"] .perioden select, :root[data-stil="vinter"] .pg-suche, :root[data-stil="vinter"] input[type="search"] { border-radius: 10px; }
+
+/* ===== Nachtrag 16.11.2026: Glas sichtbarer, Wortmarke aus LED-Punkten, nur noch dunkel ===== */
+
+/* Glas: halbtransparent mit Unschärfe, feiner Lichtrand oben. Das Punktraster schimmert durch. */
+:root[data-stil="vinter"] .karte,
+:root[data-stil="vinter"] .tf-kachel,
+:root[data-stil="vinter"] .tf-werkzeug,
+:root[data-stil="vinter"] .kachel,
+:root[data-stil="vinter"] .m-karte,
+:root[data-stil="vinter"] .sektor-panel,
+:root[data-stil="vinter"] .meldung,
+:root[data-stil="vinter"] .filter,
+:root[data-stil="vinter"] .pg-block,
+:root[data-stil="vinter"] .pg-sitzung {
+  background: rgba(20, 25, 23, .52);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(232, 236, 233, .1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 12px 32px rgba(0, 0, 0, .28);
+}
+/* Innen liegende Blöcke etwas heller, damit Glas auf Glas lesbar bleibt */
+:root[data-stil="vinter"] .karte .pg-block,
+:root[data-stil="vinter"] .karte .pg-sitzung,
+:root[data-stil="vinter"] .karte .filter { background: rgba(255, 255, 255, .03); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); }
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-stil="vinter"] .karte, :root[data-stil="vinter"] .kachel, :root[data-stil="vinter"] .filter { background: var(--karte-fest); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* Der Hintergrund auf den übrigen Seiten etwas kräftiger, damit das Glas etwas zeigt */
+:root[data-stil="vinter"] #lava { opacity: 1; }
+
+/* Wortmarke aus LED-Punkten in der Tagesfarbe: ein Punktraster, durch die Buchstaben gestanzt.
+   Darunter ein schwacher Grundton, damit die Buchstaben auch zwischen den Punkten lesbar bleiben. */
+:root[data-stil="vinter"] .wortmarke {
+  --punkt: max(4px, .045em);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-image:
+    radial-gradient(circle at 50% 50%, var(--marke-farbe) 38%, transparent 44%),
+    linear-gradient(color-mix(in srgb, var(--marke-farbe) 16%, transparent), color-mix(in srgb, var(--marke-farbe) 16%, transparent));
+  background-size: var(--punkt) var(--punkt), 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  letter-spacing: -.02em;
+}
+:root[data-stil="vinter"] .tag-plus .wortmarke { --marke-farbe: #7ee3ad; }
+:root[data-stil="vinter"] .tag-minus .wortmarke { --marke-farbe: #ef8f86; }
+:root[data-stil="vinter"] .tag-neutral .wortmarke { --marke-farbe: #e8ece9; }
+:root[data-stil="vinter"] .wortmarke span { display: inline-block; }
+
+/* ===== Nachtrag: Punkt-Optik in weiteren Elementen ===== */
+/* Zweite LED-Tafel unter "Gewinn & Verlust", schmal und linksbündig */
+:root[data-stil="vinter"] .led-schmal { width: min(100%, 36rem); height: 48px; margin: 12px 0 0; }
+/* Gitterlinien der Charts als LED-Punkte */
+:root[data-stil="vinter"] .lc-gitter,
+:root[data-stil="vinter"] #c-svg > line[stroke="var(--linie)"] {
+  stroke: rgba(232, 236, 233, .28);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 0 6;
+}
+/* Balken mit feinem Punktraster, wie Leuchtsegmente einer Anzeigetafel */
+:root[data-stil="vinter"] .th-balken,
+:root[data-stil="vinter"] .pg-wkeit i,
+:root[data-stil="vinter"] .pg-teil,
+:root[data-stil="vinter"] .rb-spur i,
+:root[data-stil="vinter"] .em-b {
+  background-image: radial-gradient(circle at 50% 50%, transparent 0 1px, rgba(11, 13, 12, .55) 1.6px);
+  background-size: 4px 4px;
+}
+/* LIVE in der Laufleiste */
+:root[data-stil="vinter"] .kopf-live em { color: var(--akzent); font-weight: 600; margin-right: 8px; }
+
+/* Die Wortmarke hebt sich mit einem weichen Schein in der Tagesfarbe vom Hintergrund ab. Nur ein Schein,
+   kein Farbverlauf: nah ein feiner Rand, weiter außen ein breites, schwaches Licht. */
+:root[data-stil="vinter"] .wortmarke {
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--marke-farbe) 55%, transparent))
+          drop-shadow(0 0 22px color-mix(in srgb, var(--marke-farbe) 30%, transparent))
+          drop-shadow(0 0 60px color-mix(in srgb, var(--marke-farbe) 14%, transparent));
+}
+
+/* ===== Nachtrag: weiche Kanten statt dunkler Balken ===== */
+/* Kopfzeile: Glas, das nach unten ohne Kante in den Hintergrund ausläuft */
+:root[data-stil="vinter"] .leiste { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-stil="vinter"] .leiste::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -24px 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(11, 13, 12, .62), rgba(11, 13, 12, .3) 65%, rgba(11, 13, 12, 0));
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
+  mask-image: linear-gradient(180deg, #000 55%, transparent);
+  pointer-events: none;
+}
+/* Seitenleiste: ebenfalls weiches Glas, läuft nach rechts und unten aus */
+:root[data-stil="vinter"] .tabs::after {
+  background: linear-gradient(90deg, rgba(11, 13, 12, .7), rgba(11, 13, 12, .35) 70%, rgba(11, 13, 12, 0));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  -webkit-mask-image: linear-gradient(90deg, #000 60%, transparent), linear-gradient(180deg, #000 calc(100% - 4rem), transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, #000 60%, transparent), linear-gradient(180deg, #000 calc(100% - 4rem), transparent);
+  mask-composite: intersect;
+}
+/* Wortmarke: jeder Buchstabe trägt das Punktraster selbst, damit es mit seiner eigenen Form mitgeht */
+:root[data-stil="vinter"] .wortmarke span {
+  display: inline-block;
+  transform-origin: 50% 80%;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-image:
+    radial-gradient(circle at 50% 50%, var(--marke-farbe) 38%, transparent 44%),
+    linear-gradient(color-mix(in srgb, var(--marke-farbe) 16%, transparent), color-mix(in srgb, var(--marke-farbe) 16%, transparent));
+  background-size: var(--punkt) var(--punkt), 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+}

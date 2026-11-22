@@ -1,0 +1,20 @@
+# Fonds für die Seite "Fonds & Insider": ihre 13F-Meldungen an die SEC (US-Aktien, vierteljährlich,
+# bis zu 45 Tage nach Quartalsende). CIK = Kennnummer bei der SEC (auf sec.gov/edgar suchbar).
+# Du kannst Fonds ergänzen oder streichen.
+- {cik: 1067983, name: Berkshire Hathaway, art: Value}
+- {cik: 1350694, name: Bridgewater, art: Makro}
+- {cik: 1336528, name: Pershing Square, art: Aktivist}
+- {cik: 1791786, name: Elliott, art: Aktivist}
+- {cik: 1040273, name: Third Point, art: Aktivist}
+- {cik: 1656456, name: Appaloosa, art: Value}
+- {cik: 1061768, name: Baupost, art: Value}
+- {cik: 1536411, name: Duquesne (Druckenmiller), art: Makro}
+- {cik: 1029160, name: Soros Fund Management, art: Makro}
+- {cik: 1167483, name: Tiger Global, art: Wachstum}
+- {cik: 1135730, name: Coatue, art: Wachstum}
+- {cik: 1061165, name: Lone Pine, art: Wachstum}
+- {cik: 1103804, name: Viking Global, art: Long/Short}
+- {cik: 1603466, name: Point72, art: Multi-Strategie}
+- {cik: 1009207, name: D. E. Shaw, art: Quant}
+- {cik: 1037389, name: Renaissance Technologies, art: Quant}
+- {cik: 1569205, name: Fundsmith, art: Qualität}

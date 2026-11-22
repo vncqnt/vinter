@@ -1,0 +1,35 @@
+# Themen zum Stöbern auf der Seite "Prognosen". Jedes Thema ist eine Suche bei Manifold Markets.
+# suche: Suchbegriffe (Englisch findet am meisten), min_wetter: so viele Mitwetter muss ein Markt haben.
+# Du kannst Themen ergänzen, ändern oder löschen.
+min_wetter: 10
+themen:
+  - name: Fed und Zinsen
+    suche: Fed rate
+  - name: Inflation
+    suche: inflation CPI
+  - name: Rezession und Konjunktur
+    suche: recession
+  - name: Arbeitsmarkt
+    suche: unemployment rate
+  - name: Zölle und Handel
+    suche: tariffs
+  - name: Öl und Energie
+    suche: oil price
+  - name: Aktienmarkt
+    suche: S&P 500
+  - name: KI
+    suche: AI
+  - name: Halbleiter
+    suche: Nvidia
+  - name: Ukraine und Russland
+    suche: Ukraine ceasefire
+  - name: China und Taiwan
+    suche: Taiwan China
+  - name: Naher Osten
+    suche: Iran
+  - name: EZB und Europa
+    suche: ECB
+  - name: US-Politik
+    suche: Trump
+  - name: Krypto
+    suche: Bitcoin

@@ -1,0 +1,18 @@
+# Feste Versionen, damit das Add-on auf dem NUC genau so läuft wie am PC (Stand 22.11.2026).
+fastapi==0.162.2
+uvicorn==0.54.0
+pandas==3.1.1
+numpy==2.5.4
+scipy==1.18.1
+requests==2.34.2
+websockets==17.4
+yfinance==1.8.0
+feedparser==6.0.14
+certifi==2026.10.23
+pyyaml==6.0.3
+python-dotenv==1.2.4
+sentence-transformers==6.2.0
+exchange_calendars==4.13.2
+openpyxl==3.1.5
+cryptography==50.0.2
+tzdata==2026.6

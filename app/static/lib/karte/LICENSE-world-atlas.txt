@@ -1,0 +1,1 @@
+world-atlas 2.0.2 (ISC-Lizenz, Mike Bostock), Daten: Natural Earth (gemeinfrei), https://github.com/topojson/world-atlas

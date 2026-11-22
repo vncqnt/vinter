@@ -1,0 +1,19 @@
+# Historische Stressphasen für den Stresstest (Seite "Stresstest").
+# von: letzter Tag vor dem Einbruch (Schlusskurs zählt als Start), bis: Tiefpunkt bzw. Ende der Phase.
+# Du kannst Phasen ergänzen oder ändern. Datumsformat JJJJ-MM-TT.
+- name: Zoll-Schock
+  von: 2025-04-02
+  bis: 2025-04-08
+  beschreibung: US-Zollpaket am "Liberation Day", Märkte weltweit in wenigen Tagen zweistellig im Minus.
+- name: Yen-Carry-Trade
+  von: 2024-07-16
+  bis: 2024-08-05
+  beschreibung: Japans Zinsanhebung löst Abbau von Yen-Krediten aus, Tech-Werte und Nikkei brechen ein.
+- name: Zinswende 2022
+  von: 2022-01-03
+  bis: 2022-10-12
+  beschreibung: Höchste Inflation seit 40 Jahren, Fed und EZB erhöhen die Zinsen schnell, Wachstumswerte fallen lange.
+- name: Corona-Crash
+  von: 2020-02-19
+  bis: 2020-03-23
+  beschreibung: Pandemie und Lockdowns, schnellster Absturz der Börsengeschichte in gut vier Wochen.

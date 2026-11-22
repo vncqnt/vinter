@@ -1,0 +1,86 @@
+# Feste Infrastruktur für den Globus (Ebene "Lage"). Ausgewählte Anlagen mit Marktbezug, Lage gerundet,
+# Pipelines mit vereinfachtem Verlauf (nur Eckpunkte). Ergänzen oder löschen genügt.
+# art: oelpipeline, gaspipeline, lng_export, lng_import, oelhafen, raffinerie, chips, rohstoff
+# punkt: [Länge, Breite] · verlauf: Liste von [Länge, Breite] (nur Pipelines)
+# ticker: börsennotierte Betreiber/Eigentümer (optional); steht einer davon in deinem Depot, wird die Anlage hervorgehoben.
+
+anlagen:
+  # ---- Ölpipelines ----
+  - {name: Ost-West-Pipeline (Saudi-Arabien), art: oelpipeline, verlauf: [[49.67, 25.94], [46.7, 24.7], [42.5, 24.2], [38.06, 24.09]],
+     notiz: "Bringt saudisches Öl zum Roten Meer und umgeht so die Straße von Hormus (bis etwa 7 Mio. Barrel am Tag).", ticker: ["2222.SR"]}
+  - {name: Habshan–Fujairah (VAE), art: oelpipeline, verlauf: [[53.6, 23.7], [55.2, 24.3], [56.33, 25.12]],
+     notiz: "Zweite Umgehung von Hormus: Öl aus Abu Dhabi direkt an den Golf von Oman (etwa 1,5 Mio. Barrel am Tag)."}
+  - {name: SUMED (Ägypten), art: oelpipeline, verlauf: [[32.35, 29.6], [31.2, 30.4], [29.65, 31.1]],
+     notiz: "Parallel zum Suezkanal, für Tanker, die zu groß für den Kanal sind."}
+  - {name: Druschba, art: oelpipeline, verlauf: [[52.3, 54.9], [44.0, 53.2], [36.2, 52.7], [29.2, 52.05], [23.7, 52.1], [19.0, 52.3], [14.28, 53.06]],
+     notiz: "Russisches Öl nach Mitteleuropa. Der Nordstrang nach Deutschland (Schwedt) ist seit 2023 für russisches Öl gesperrt."}
+  - {name: Druschba Südstrang, art: oelpipeline, verlauf: [[29.2, 52.05], [24.0, 49.8], [22.2, 48.6], [18.9, 47.1]],
+     notiz: "Durch die Ukraine nach Ungarn und in die Slowakei, immer wieder Ziel von Angriffen."}
+  - {name: CPC-Pipeline, art: oelpipeline, verlauf: [[53.4, 46.15], [51.9, 47.1], [46.0, 46.3], [37.8, 44.7]],
+     notiz: "Kasachisches Öl zum Schwarzen Meer (Noworossijsk), gut 1 % des Weltöls."}
+  - {name: Baku–Tiflis–Ceyhan, art: oelpipeline, verlauf: [[49.87, 40.4], [44.8, 41.7], [41.0, 40.0], [35.8, 36.9]],
+     notiz: "Öl aus Aserbaidschan ans Mittelmeer, an Russland vorbei."}
+  - {name: Keystone, art: oelpipeline, verlauf: [[-111.3, 52.7], [-104.0, 49.0], [-96.9, 40.0], [-96.77, 35.98], [-95.3, 29.7]],
+     notiz: "Kanadisches Schweröl in die USA, nach Cushing und an den Golf.", ticker: ["TRP"]}
+  - {name: Trans Mountain, art: oelpipeline, verlauf: [[-113.5, 53.5], [-119.3, 50.7], [-122.95, 49.27]],
+     notiz: "Kanadisches Öl an den Pazifik (Vancouver), wichtig für Exporte nach Asien."}
+  - {name: Colonial Pipeline, art: oelpipeline, verlauf: [[-95.3, 29.7], [-90.1, 30.5], [-84.4, 33.75], [-77.4, 37.5], [-74.24, 40.63]],
+     notiz: "Benzin und Diesel von der Golfküste an die US-Ostküste. Ein Ausfall 2021 führte zu Engpässen an Tankstellen."}
+
+  # ---- Gaspipelines ----
+  - {name: TurkStream, art: gaspipeline, verlauf: [[37.3, 44.9], [33.0, 43.2], [28.1, 41.6]],
+     notiz: "Russisches Gas durchs Schwarze Meer in die Türkei und nach Südosteuropa, die letzte direkte Route Richtung EU."}
+  - {name: Nord Stream (außer Betrieb), art: gaspipeline, verlauf: [[28.7, 60.6], [24.0, 59.6], [19.5, 56.5], [15.5, 55.2], [13.65, 54.15]],
+     notiz: "Seit den Anschlägen im September 2022 außer Betrieb."}
+  - {name: Norpipe/Europipe (Norwegen), art: gaspipeline, verlauf: [[2.5, 58.5], [3.2, 56.6], [6.0, 54.5], [7.2, 53.35]],
+     notiz: "Norwegisches Gas nach Deutschland. Norwegen ist seit 2022 der größte Gaslieferant der EU.", ticker: ["EQNR"]}
+  - {name: TANAP/TAP (Südlicher Gaskorridor), art: gaspipeline, verlauf: [[49.8, 40.4], [43.0, 41.0], [35.0, 39.0], [26.5, 41.0], [19.5, 40.8], [18.4, 40.35]],
+     notiz: "Gas aus Aserbaidschan über die Türkei und Griechenland nach Italien."}
+  - {name: Kraft Sibiriens, art: gaspipeline, verlauf: [[110.0, 60.6], [120.0, 57.0], [127.5, 50.3]],
+     notiz: "Russisches Gas nach China, Russlands wichtigste Ausweichroute nach dem Wegfall Europas."}
+
+  # ---- LNG ----
+  - {name: Ras Laffan (Katar), art: lng_export, punkt: [51.55, 25.9],
+     notiz: "Einer der größten LNG-Standorte der Welt. Jede Ladung muss durch die Straße von Hormus."}
+  - {name: Sabine Pass LNG, art: lng_export, punkt: [-93.87, 29.73], notiz: "Größtes LNG-Exportterminal der USA (Cheniere).", ticker: ["LNG", "CQP"]}
+  - {name: Corpus Christi LNG, art: lng_export, punkt: [-97.2, 27.88], notiz: "LNG-Export an der Golfküste von Texas (Cheniere).", ticker: ["LNG"]}
+  - {name: Freeport LNG, art: lng_export, punkt: [-95.3, 28.94], notiz: "Ausfälle hier bewegen regelmäßig den US- und den europäischen Gaspreis."}
+  - {name: Plaquemines LNG, art: lng_export, punkt: [-89.7, 29.4], notiz: "Neues Großterminal in Louisiana (Venture Global).", ticker: ["VG"]}
+  - {name: Gorgon LNG (Australien), art: lng_export, punkt: [115.4, -20.8], notiz: "Eines der größten LNG-Projekte Australiens (Chevron).", ticker: ["CVX"]}
+  - {name: Yamal LNG (Russland), art: lng_export, punkt: [72.05, 71.27], notiz: "Russisches LNG aus der Arktis, teils unter Sanktionen."}
+  - {name: Wilhelmshaven LNG, art: lng_import, punkt: [8.15, 53.6], notiz: "Erstes deutsches LNG-Terminal (seit Dezember 2022)."}
+  - {name: Mukran LNG (Rügen), art: lng_import, punkt: [13.6, 54.5], notiz: "LNG-Terminal an der Ostsee."}
+
+  # ---- Ölhäfen und Handelsplätze ----
+  - {name: Ras Tanura, art: oelhafen, punkt: [50.16, 26.64], notiz: "Wichtigster Ölverladehafen Saudi-Arabiens, im Persischen Golf.", ticker: ["2222.SR"]}
+  - {name: Fujairah, art: oelhafen, punkt: [56.36, 25.17], notiz: "Großer Öllager- und Bunkerhafen außerhalb der Straße von Hormus."}
+  - {name: Cushing (Oklahoma), art: oelhafen, punkt: [-96.77, 35.98], notiz: "Lagerort, an dem der WTI-Ölpreis gemessen wird. Volle oder leere Tanks bewegen den Preis."}
+  - {name: Houston Ship Channel, art: oelhafen, punkt: [-95.0, 29.73], notiz: "Größter Petrochemie-Standort der USA; Hurrikans hier treffen Raffinerien und Exporte."}
+  - {name: Rotterdam, art: oelhafen, punkt: [4.05, 51.95], notiz: "Größter Hafen Europas, Drehscheibe für Öl, Diesel und Container."}
+  - {name: Noworossijsk, art: oelhafen, punkt: [37.8, 44.7], notiz: "Russlands größter Ölhafen am Schwarzen Meer, Endpunkt der CPC-Pipeline."}
+  - {name: Primorsk, art: oelhafen, punkt: [28.6, 60.35], notiz: "Russischer Ölhafen an der Ostsee, wichtig für die Schattenflotte."}
+  - {name: Ningbo-Zhoushan, art: oelhafen, punkt: [122.1, 29.9], notiz: "Größter Hafen der Welt nach Umschlag, wichtig für Chinas Rohöl-Importe."}
+  - {name: Singapur, art: oelhafen, punkt: [103.8, 1.27], notiz: "Größter Bunker- und Ölhandelsplatz Asiens an der Straße von Malakka."}
+
+  # ---- Raffinerien ----
+  - {name: Jamnagar (Reliance), art: raffinerie, punkt: [69.85, 22.35], notiz: "Größter Raffinerie-Komplex der Welt, verarbeitet viel russisches Öl.", ticker: ["RELIANCE.NS"]}
+  - {name: Ruwais, art: raffinerie, punkt: [52.7, 24.1], notiz: "Große Raffinerie in Abu Dhabi (ADNOC)."}
+  - {name: Port Arthur (Motiva), art: raffinerie, punkt: [-93.95, 29.9], notiz: "Größte Raffinerie der USA, in der Hurrikan-Zone."}
+
+  # ---- Halbleiter ----
+  - {name: TSMC Hsinchu, art: chips, punkt: [120.99, 24.78], notiz: "Stammsitz und Fabriken von TSMC, Herz der weltweiten Chipfertigung.", ticker: ["TSM", "2330.TW"]}
+  - {name: TSMC Tainan, art: chips, punkt: [120.27, 23.11], notiz: "Die modernsten Fertigungen von TSMC (3 und 2 Nanometer), hier entstehen die meisten KI-Chips.", ticker: ["TSM", "2330.TW", "NVDA"]}
+  - {name: TSMC Arizona, art: chips, punkt: [-112.2, 33.7], notiz: "TSMC-Fabriken in den USA.", ticker: ["TSM"]}
+  - {name: Micron Taichung, art: chips, punkt: [120.6, 24.2], notiz: "Großer Teil der Speicherchip-Fertigung von Micron (DRAM, HBM).", ticker: ["MU"]}
+  - {name: Micron Hiroshima, art: chips, punkt: [132.7, 34.4], notiz: "DRAM-Fabrik von Micron in Japan.", ticker: ["MU"]}
+  - {name: Micron Boise, art: chips, punkt: [-116.15, 43.53], notiz: "Hauptsitz von Micron, neue Speicherfabrik im Bau.", ticker: ["MU"]}
+  - {name: Samsung Pyeongtaek, art: chips, punkt: [127.05, 37.0], notiz: "Größte Chipfabrik von Samsung (Speicher und Auftragsfertigung).", ticker: ["005930.KS"]}
+  - {name: SK Hynix Icheon, art: chips, punkt: [127.48, 37.28], notiz: "Hauptstandort von SK Hynix, größter Lieferant von HBM-Speicher für KI-Chips.", ticker: ["000660.KS"]}
+  - {name: JASM Kumamoto (TSMC), art: chips, punkt: [130.8, 32.88], notiz: "TSMC-Fabrik in Japan.", ticker: ["TSM"]}
+  - {name: ASML Veldhoven, art: chips, punkt: [5.4, 51.4], notiz: "Einziger Hersteller der EUV-Belichtungsmaschinen für moderne Chips.", ticker: ["ASML", "ASML.AS"]}
+
+  # ---- Rohstoffe ----
+  - {name: Escondida (Kupfer), art: rohstoff, punkt: [-69.07, -24.27], notiz: "Größte Kupfermine der Welt (Chile). Streiks und Erdbeben bewegen den Kupferpreis.", ticker: ["BHP"]}
+  - {name: Grasberg (Kupfer, Gold), art: rohstoff, punkt: [137.1, -4.05], notiz: "Eine der größten Kupfer- und Goldminen (Indonesien).", ticker: ["FCX"]}
+  - {name: Greenbushes (Lithium), art: rohstoff, punkt: [116.06, -33.86], notiz: "Größte Hartgestein-Lithiummine der Welt (Australien).", ticker: ["ALB"]}
+  - {name: Bayan Obo (Seltene Erden), art: rohstoff, punkt: [109.97, 41.77], notiz: "Größte Lagerstätte Seltener Erden, Grundlage von Chinas Exportkontrollen."}

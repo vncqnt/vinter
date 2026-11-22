@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="de" data-theme="dark" data-stil="vinter">
+<head>
+  <meta charset="utf-8">
+  <meta name="theme-color" content="#070b08">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Vinter · Anmelden</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="/symbole/favicon-32.png">
+  <link rel="apple-touch-icon" href="/symbole/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Vinter">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/vinter.css">
+  <style>
+    body { min-height: 100svh; display: grid; place-items: center; padding: 16px; }
+    .an-karte { width: min(24rem, 100%); padding: 28px 24px; }
+    .an-karte h1 { font-family: "Unbounded", var(--schrift, sans-serif); font-size: 1.75rem; margin: 0 0 4px; }
+    .an-karte .sekundaer { margin: 0 0 16px; }
+    .an-karte .knopf { width: 100%; margin-top: 16px; justify-content: center; }
+    .an-meldung { min-height: 1.25rem; margin: 12px 0 0; color: var(--verlust); font-size: .875rem; }
+    .an-hinweis { font-size: .8rem; color: var(--grau); margin-top: 16px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <main class="karte an-karte">
+    <h1>Vinter</h1>
+    <p class="sekundaer" id="an-unter">Anmelden</p>
+    <form id="an-form" autocomplete="on">
+      <label class="feld" id="an-code-feld" hidden><span>Einrichtungscode</span><input id="an-code" autocomplete="off" placeholder="XXXX-XXXX-XXXX"></label>
+      <label class="feld"><span>Name</span><input id="an-name" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32" required></label>
+      <label class="feld"><span>Passwort</span><input id="an-passwort" type="password" autocomplete="current-password" maxlength="200" required></label>
+      <label class="feld" id="an-wdh-feld" hidden><span>Passwort wiederholen</span><input id="an-wdh" type="password" autocomplete="new-password" maxlength="200"></label>
+      <button class="knopf primaer" id="an-los" type="submit">Anmelden</button>
+      <p class="an-meldung" id="an-meldung" role="alert"></p>
+    </form>
+    <p class="an-hinweis" id="an-hinweis"></p>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const einladung = new URLSearchParams(location.search).get('einladung');
+    let modus = 'anmelden';
+    function setze(m) {
+      modus = m;
+      const neu = m !== 'anmelden';
+      $('an-code-feld').hidden = m !== 'einrichten';
+      $('an-wdh-feld').hidden = !neu;
+      $('an-passwort').autocomplete = neu ? 'new-password' : 'current-password';
+      $('an-los').textContent = { anmelden: 'Anmelden', einrichten: 'Konto anlegen', einladung: 'Konto anlegen' }[m];
+      $('an-unter').textContent = { anmelden: 'Anmelden', einrichten: 'Erstes Konto (Admin) anlegen', einladung: 'Du bist eingeladen: eigenes Konto anlegen' }[m];
+      $('an-hinweis').textContent = {
+        anmelden: '',
+        einrichten: 'Den Einrichtungscode findest du im Log des Add-ons (Zeile „VINTER EINRICHTUNG“). Dieses Konto übernimmt die bisherigen Daten.',
+        einladung: 'Name: 2 bis 32 Zeichen, Kleinbuchstaben, Ziffern, - und _. Passwort: mindestens 10 Zeichen. Deine Daten (Depot, Watchlist, Thesen) sieht niemand außer dir.',
+      }[m];
+    }
+    async function senden(pfad, daten) {
+      const r = await fetch(pfad, { method: 'POST', headers: { 'content-type': 'application/json', 'x-vinter': 'konto' }, body: JSON.stringify(daten), credentials: 'same-origin' });
+      return r.json().catch(() => ({ fehler: 'Der Server antwortet nicht.' }));
+    }
+    (async () => {
+      const s = await fetch('/api/konto/status').then((r) => r.json()).catch(() => ({}));
+      if (s.angemeldet) { location.replace('/'); return; }
+      if (einladung) {
+        const p = await senden('/api/konto/einladung/pruefen', { code: einladung });
+        if (p.gueltig) setze('einladung');
+        else { setze('anmelden'); $('an-meldung').textContent = 'Diese Einladung ist abgelaufen oder wurde schon benutzt.'; }
+      } else setze(s.eingerichtet === false ? 'einrichten' : 'anmelden');
+      $('an-name').focus();
+    })();
+    $('an-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('an-meldung').textContent = '';
+      const name = $('an-name').value.trim().toLowerCase(), passwort = $('an-passwort').value;
+      if (modus !== 'anmelden' && passwort !== $('an-wdh').value) { $('an-meldung').textContent = 'Die beiden Passwörter sind nicht gleich.'; return; }
+      $('an-los').disabled = true;
+      const r = modus === 'einrichten' ? await senden('/api/konto/einrichten', { code: $('an-code').value, name, passwort })
+        : modus === 'einladung' ? await senden('/api/konto/einladung/annehmen', { code: einladung, name, passwort })
+          : await senden('/api/konto/anmelden', { name, passwort });
+      $('an-los').disabled = false;
+      if (r.fehler) { $('an-meldung').textContent = r.fehler; return; }
+      location.replace('/');
+    });
+  </script>
+</body>
+</html>

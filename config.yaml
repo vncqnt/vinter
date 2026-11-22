@@ -1,0 +1,20 @@
+# Home-Assistant-Add-on "Vinter". Wird vom Supervisor direkt aus diesem Repository gebaut.
+# Nur als Host: kein Ingress, kein Seitenleisten-Eintrag, eigener Port mit eigener Anmeldung.
+name: Vinter
+version: "0.9.0"
+slug: vinter
+description: Persönliches Markt- und Depot-Dashboard (nur lesen, kein Handel)
+arch:
+  - amd64
+startup: application
+boot: auto
+ingress: false
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Vinter im Browser und als iPhone-App
+webui: "http://[HOST]:[PORT:8099]"
+watchdog: "tcp://[HOST]:[PORT:8099]"
+# Keys trägt der Nutzer im Tool selbst ein (Konto -> Einstellungen), nicht hier.
+options: {}
+schema: {}

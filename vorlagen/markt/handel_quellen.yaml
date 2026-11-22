@@ -1,0 +1,133 @@
+# Quellen für Handelsströme und Handels-Frühindikatoren (Punkt 31b).
+# "art" wählt den Einleser im Code (census, comtrade, gacc, tsmc, portwatch). Eine Quelle ohne passenden
+# Einleser oder mit "aktiv: false" erscheint nur auf der Status-Seite, mit Grund.
+# kalender: wann die Quelle üblicherweise veröffentlicht (deutsche Zeit). Im Zeitfenster wird alle
+# "takt_minuten" geprüft, bis der erwartete Zeitraum da ist, sonst einmal am Tag.
+# verzug_monate: welcher Monat im Fenster erwartet wird (1 = Vormonat).
+
+einstellungen:
+  limit_anteil: 0.7          # höchstens 70 % des offiziellen Kontingents nutzen, dann pausieren
+  versuche: 5                # Wiederholungen bei Fehlern oder Bremsung (wachsende Wartezeit)
+  sprung_schwelle: 60        # ab so viel Prozent Veränderung zum Vormonat wird ein neuer Wert markiert
+  auffaellig_sigma: 2        # Frühindikatoren: ab diesem Sigma hervorheben
+  kontakt_env: HANDEL_KONTAKT  # Kontaktangabe für den User-Agent bei Webseiten; leer = ohne Kontakt
+
+quellen:
+  census:
+    name: US Census Bureau, International Trade API
+    art: census
+    url: https://api.census.gov/data/timeseries/intltrade
+    format: JSON
+    key_env: CENSUS_API_KEY
+    limit: 500               # Anfragen je Tag mit Key
+    rhythmus: monatlich, gut 5 Wochen nach Monatsende (8:30 Uhr New York)
+    kalender: {tage: [2, 10], uhrzeit: ["14:30", "20:00"], takt_minuten: 10}
+    verzug_monate: 2
+    seit: 2015-01            # Historie beim ersten Laden; danach werden nur die letzten 14 Monate neu geholt
+    summen_toleranz: 1       # Prozent: Summe der Länder gegen "alle Länder"
+    werte: "Exporte: Gesamtwert (FAS), Importe: General Imports (Zollwert)"
+
+  comtrade:
+    name: UN Comtrade
+    art: comtrade
+    url: https://comtradeapi.un.org/data/v1/get
+    format: JSON
+    key_env: COMTRADE_API_KEY
+    limit: 500
+    rhythmus: Länder melden Monate bis Jahre verspätet; Abruf einmal im Monat, gebündelt
+    kalender: {monatlich: 1, uhrzeit: ["03:00", "23:00"]}
+    summen_toleranz: 10      # Comtrade enthält vertrauliche und nicht zugeordnete Posten
+    # Für diese Länder wird jeden Monat alles vorgeladen (Jahreswerte mit allen Partnern, Monatswerte gesamt).
+    # Andere Länder lädt das Chord-Diagramm bei Bedarf nach.
+    berichtslaender: [USA, CHN, DEU, JPN, KOR, NLD, FRA, ITA, GBR, CAN, MEX, IND, VNM, MYS, SGP, THA, AUS, BRA, SAU, CHE, ESP, POL, IDN, TUR, BEL, ARE]
+    jahre: 2                 # jeden Monat neu: die letzten 2 vollen Jahre (Länder korrigieren nachträglich)
+    historie_ab: 2015        # ältere Jahre einmalig nachladen (nur fehlende, 3 Jahre je Anfrage)
+    monate_mit_partnern: true  # laufendes Jahr: Monatswerte je Partner (für "2026 bisher"), dazu dieselben Monate im Vorjahr
+
+  gacc:
+    name: Chinesischer Zoll (GACC), englische Monatstabellen
+    art: gacc
+    url: http://english.customs.gov.cn/statics/report/preliminary.html
+    format: HTML-Tabellen (USD)
+    limit: 200               # eigene Obergrenze je Tag, keine offizielle
+    abstand_sekunden: 3      # Pause zwischen zwei Seiten
+    rhythmus: monatlich um den 7. bis 10.; Januar und Februar erscheinen zusammen im März
+    kalender: {tage: [6, 14], uhrzeit: ["03:00", "13:00"], takt_minuten: 10}
+    verzug_monate: 1
+    auslassen_monate: [2]     # im Februar kommt nichts (Januar erscheint mit Februar)
+    jahre: [2024, 2025, 2026]
+    werte: "Monatswerte nach Ländern (Gesamt) und Hauptwaren; vorläufige Zahlen"
+
+  tsmc:
+    name: TSMC Monatsumsatz (Investor Relations)
+    art: tsmc
+    url: https://investor.tsmc.com/english/monthly-revenue/{jahr}
+    format: HTML-Tabelle (NT$ Millionen)
+    limit: 50
+    abstand_sekunden: 2
+    rhythmus: monatlich um den 10.
+    kalender: {tage: [8, 12], uhrzeit: ["06:00", "12:00"], takt_minuten: 10}
+    verzug_monate: 1
+    jahre: 3
+    kurs: TWD=X              # Monatsdurchschnitt von Yahoo für die Umrechnung in USD
+
+  portwatch:
+    name: IMF PortWatch, Durchfahrten an Meerengen
+    art: portwatch
+    url: https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query
+    format: JSON (ArcGIS)
+    limit: 300
+    rhythmus: wöchentlich (dienstags), Daten mit einigen Tagen Verzug
+    kalender: {wochentag: 1, uhrzeit: ["10:00", "20:00"], takt_minuten: 30}
+    seit_tage: 760
+
+  korea_10tage:
+    name: Südkorea, Exporte der ersten 10 und 20 Tage (Zoll)
+    aktiv: false
+    url: https://tradedata.go.kr
+    rhythmus: am 1., 11. und 21. des Monats
+    grund: Keine offizielle Schnittstelle, nur eine Web-App mit internen Adressen. Nicht zuverlässig automatisch abrufbar (geprüft 20.11.2026).
+
+  korea_monat:
+    name: Südkorea, Monatsexporte nach Ware und Land (data.go.kr)
+    aktiv: false
+    url: https://apis.data.go.kr/1220000/nitemtrade
+    rhythmus: monatlich um den 15.
+    grund: Offizielle Schnittstelle, der Key verlangt aber meist eine koreanische Identitätsprüfung. Bis dahin über UN Comtrade (verspätet).
+
+  taiwan_zoll:
+    name: Taiwan, Monatsexporte (Finanzministerium)
+    aktiv: false
+    url: https://portal.sw.nat.gov.tw/APGA/GA30E
+    rhythmus: monatlich um den 7. bis 9.
+    grund: Portal antwortete bei der Prüfung nicht, Ersatz nur als Webformular. Taiwan meldet nicht an UN Comtrade.
+
+  taiwan_auftraege:
+    name: Taiwan, Exportaufträge (Wirtschaftsministerium)
+    aktiv: false
+    url: https://www.moea.gov.tw
+    rhythmus: monatlich um den 20.
+    grund: Seite ist durch Cloudflare gegen automatische Abrufe gesperrt.
+
+# Frühindikatoren für die Kachel. quelle + land (Berichtsland) + partner + richtung + ware oder gruppe.
+# ware: HS-Code, TOTAL oder bei GACC der Name der Hauptware (wie in der Tabelle). gruppe: aus warengruppen.yaml.
+fruehindikatoren:
+  - {name: "China Exporte gesamt", quelle: gacc, land: CHN, partner: WLD, richtung: export, ware: TOTAL}
+  - {name: "China Importe gesamt", quelle: gacc, land: CHN, partner: WLD, richtung: import, ware: TOTAL}
+  - {name: "China Exporte in die USA", quelle: gacc, land: CHN, partner: USA, richtung: export, ware: TOTAL}
+  - {name: "China Exporte nach Taiwan", quelle: gacc, land: CHN, partner: TWN, richtung: export, ware: TOTAL}
+  - {name: "China Chip-Exporte", quelle: gacc, land: CHN, partner: WLD, richtung: export, gruppe: halbleiter}
+  - {name: "China Chip-Importe", quelle: gacc, land: CHN, partner: WLD, richtung: import, gruppe: halbleiter}
+  - {name: "China Seltene-Erden-Exporte", quelle: gacc, land: CHN, partner: WLD, richtung: export, gruppe: seltene_erden}
+  - {name: "China Rohöl-Importe", quelle: gacc, land: CHN, partner: WLD, richtung: import, gruppe: rohoel}
+  - {name: "China Flüssiggas/Erdgas-Importe", quelle: gacc, land: CHN, partner: WLD, richtung: import, gruppe: fluessiggas}
+  - {name: "China Kupfer-Importe", quelle: gacc, land: CHN, partner: WLD, richtung: import, gruppe: kupfer}
+  - {name: "China Auto-Exporte", quelle: gacc, land: CHN, partner: WLD, richtung: export, gruppe: fahrzeuge}
+  - {name: "TSMC Umsatz", quelle: tsmc, land: TWN, partner: WLD, richtung: umsatz, ware: tsmc_umsatz}
+  - {name: "USA Importe gesamt", quelle: census, land: USA, partner: WLD, richtung: import, ware: TOTAL}
+  - {name: "USA Importe aus China", quelle: census, land: USA, partner: CHN, richtung: import, ware: TOTAL}
+  - {name: "USA Chip-Importe aus Taiwan", quelle: census, land: USA, partner: TWN, richtung: import, gruppe: halbleiter}
+  - {name: "USA Chip-Exporte", quelle: census, land: USA, partner: WLD, richtung: export, gruppe: halbleiter}
+  - {name: "USA Rüstungsexporte", quelle: census, land: USA, partner: WLD, richtung: export, gruppe: ruestung}
+  - {name: "Südkorea Chip-Exporte (UN, verspätet)", quelle: comtrade, land: KOR, partner: WLD, richtung: export, gruppe: halbleiter}
+  - {name: "Deutschland Exporte gesamt (UN, verspätet)", quelle: comtrade, land: DEU, partner: WLD, richtung: export, ware: TOTAL}

@@ -1,0 +1,5 @@
+# Dateien, die im Linux-Container laufen, immer mit Linux-Zeilenenden
+*.sh text eol=lf
+Dockerfile text eol=lf
+config.yaml text eol=lf
+repository.yaml text eol=lf

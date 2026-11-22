@@ -1,0 +1,103 @@
+# Kennzahlen-Bibliothek für die Fundamentalanalyse (Punkt 24c). Neue Kennzahl = neuer Eintrag, kein Code nötig.
+#
+# formel: Rechnung aus Feldern der Periode. Erlaubt: + - * / **, Klammern, abs(), min(), max(), mittel(a, b).
+#   Felder (je Periode): umsatz, bruttogewinn, ebitda, ebit, operatives_ergebnis, nettogewinn, eps, aktien, fue,
+#   zinsaufwand, steuerquote, vorsteuer, ocf, capex, fcf, abschreibungen, sbc, dividenden, rueckkauf, cash, schulden,
+#   eigenkapital, bilanzsumme, umlaufvermoegen, kurzfr_verbindlichkeiten, verbindlichkeiten, goodwill, lager,
+#   forderungen, gewinnruecklagen, working_capital, investiertes_kapital, aktien_ausstehend, umsatzkosten.
+#   vj_<feld> = dasselbe Feld ein Jahr früher, mittel(eigenkapital, vj_eigenkapital) = Durchschnitt.
+#   Markt (zum Periodenende bzw. heute): kurs, boersenwert, ev (Börsenwert + Schulden − Cash), mitarbeiter.
+#   Nur heute (aktuell: true): fwd_kgv, fwd_eps, peg, kursziel, kursziel_abstand, rating, analysten, short_quote,
+#   short_veraenderung, institutionell, insider_netto, schaetzung_1m, schaetzung_3m, wachstum_2j, umsatz_wachstum_fwd,
+#   div_rendite, piotroski, altman_z.
+# einheit: prozent (Formel liefert einen Anteil, Anzeige × 100), faktor, betrag, je_aktie, tage, zahl, punkte
+# hoeher_besser: true / false / weglassen (neutral) – bestimmt die Farben im Peer-Vergleich
+# positiv: Felder, die größer als 0 sein müssen, sonst "n. a." (z. B. kein KGV bei Verlust)
+# nicht_fuer: Yahoo-Sektoren, für die die Kennzahl keinen Sinn ergibt ("n. a." statt falsch gerechnet)
+# jahresbezug: true = Flussgrößen werden bei Quartalswerten auf ein Jahr hochgerechnet (× 4)
+
+wachstum:
+  - {id: umsatz, name: Umsatz, formel: umsatz, einheit: betrag, hoeher_besser: true, erklaerung: "Erlöse aus dem Verkauf von Waren und Dienstleistungen."}
+  - {id: bruttogewinn, name: Bruttogewinn, formel: bruttogewinn, einheit: betrag, hoeher_besser: true, nicht_fuer: [Financial Services], erklaerung: "Umsatz minus Herstellungskosten."}
+  - {id: ebitda, name: EBITDA, formel: ebitda, einheit: betrag, hoeher_besser: true, nicht_fuer: [Financial Services], erklaerung: "Ergebnis vor Zinsen, Steuern und Abschreibungen. Bei Banken ohne Aussage, weil Zinsen dort das Geschäft sind."}
+  - {id: ebit, name: EBIT, formel: ebit, einheit: betrag, hoeher_besser: true, nicht_fuer: [Financial Services], erklaerung: "Ergebnis vor Zinsen und Steuern."}
+  - {id: nettogewinn, name: Nettogewinn, formel: nettogewinn, einheit: betrag, hoeher_besser: true, erklaerung: "Gewinn für die Aktionäre nach allen Kosten und Steuern."}
+  - {id: eps, name: Gewinn je Aktie, formel: eps, einheit: je_aktie, hoeher_besser: true, erklaerung: "Nettogewinn geteilt durch die verwässerte Aktienzahl."}
+  - {id: fcf, name: Free Cashflow, formel: fcf, einheit: betrag, hoeher_besser: true, erklaerung: "Operativer Cashflow minus Investitionen in Sachanlagen: das Geld, das wirklich übrig bleibt."}
+
+profitabilitaet:
+  - {id: bruttomarge, name: Bruttomarge, formel: bruttogewinn / umsatz, einheit: prozent, hoeher_besser: true, positiv: [umsatz], nicht_fuer: [Financial Services], erklaerung: "Wie viel vom Umsatz nach den Herstellungskosten bleibt. Zeigt Preissetzungsmacht."}
+  - {id: ebitda_marge, name: EBITDA-Marge, formel: ebitda / umsatz, einheit: prozent, hoeher_besser: true, positiv: [umsatz], nicht_fuer: [Financial Services], erklaerung: "EBITDA im Verhältnis zum Umsatz."}
+  - {id: operative_marge, name: Operative Marge, formel: operatives_ergebnis / umsatz, einheit: prozent, hoeher_besser: true, positiv: [umsatz], erklaerung: "Operatives Ergebnis im Verhältnis zum Umsatz."}
+  - {id: nettomarge, name: Nettomarge, formel: nettogewinn / umsatz, einheit: prozent, hoeher_besser: true, positiv: [umsatz], erklaerung: "Nettogewinn im Verhältnis zum Umsatz."}
+  - {id: fcf_marge, name: FCF-Marge, formel: fcf / umsatz, einheit: prozent, hoeher_besser: true, positiv: [umsatz], nicht_fuer: [Financial Services], erklaerung: "Free Cashflow im Verhältnis zum Umsatz."}
+  - {id: roe, name: Eigenkapitalrendite (ROE), formel: "nettogewinn / mittel(eigenkapital, vj_eigenkapital)", einheit: prozent, hoeher_besser: true, positiv: [eigenkapital], jahresbezug: true, erklaerung: "Nettogewinn je eingesetztem Eigenkapital (Durchschnitt Anfang/Ende). Hohe Schulden treiben den Wert künstlich hoch."}
+  - {id: roic, name: Kapitalrendite (ROIC), formel: "operatives_ergebnis * (1 - steuerquote) / mittel(investiertes_kapital, vj_investiertes_kapital)", einheit: prozent, hoeher_besser: true, positiv: [investiertes_kapital], nicht_fuer: [Financial Services], jahresbezug: true, erklaerung: "Operatives Ergebnis nach Steuern je investiertem Kapital (Eigen- plus Fremdkapital). Liegt sie dauerhaft über den Kapitalkosten (grob 8 bis 10 %), schafft die Firma Wert."}
+  - {id: roa, name: Gesamtkapitalrendite (ROA), formel: "nettogewinn / mittel(bilanzsumme, vj_bilanzsumme)", einheit: prozent, hoeher_besser: true, positiv: [bilanzsumme], jahresbezug: true, erklaerung: "Nettogewinn je Bilanzsumme."}
+
+cashflow:
+  - {id: ocf, name: Operativer Cashflow, formel: ocf, einheit: betrag, hoeher_besser: true, erklaerung: "Geldzufluss aus dem laufenden Geschäft."}
+  - {id: capex, name: Capex, formel: capex, einheit: betrag, erklaerung: "Investitionen in Sachanlagen (Fabriken, Rechenzentren, Maschinen)."}
+  - {id: capex_umsatz, name: Capex / Umsatz, formel: capex / umsatz, einheit: prozent, positiv: [umsatz], erklaerung: "Wie viel vom Umsatz in Sachanlagen fließt. Bei KI-Infrastruktur derzeit stark steigend."}
+  - {id: capex_ocf, name: Capex / operativer Cashflow, formel: capex / ocf, einheit: prozent, positiv: [ocf], erklaerung: "Welcher Teil des operativen Cashflows für Investitionen draufgeht. Über 100 %: Investitionen werden aus Reserven oder Schulden bezahlt."}
+  - {id: abschreibung_capex, name: Abschreibungen / Capex, formel: abschreibungen / capex, einheit: faktor, positiv: [capex], erklaerung: "Unter 1: Es wird mehr investiert als abgeschrieben, die Abschreibungen (und damit die Kosten) werden später steigen."}
+  - {id: cash_umwandlung, name: Cash-Umwandlung, formel: fcf / nettogewinn, einheit: faktor, hoeher_besser: true, positiv: [nettogewinn], nicht_fuer: [Financial Services], erklaerung: "Free Cashflow je Euro Gewinn. Deutlich unter 1 über Jahre: Gewinne kommen nicht als Geld an."}
+  - {id: fue, name: F&E, formel: fue, einheit: betrag, erklaerung: "Ausgaben für Forschung und Entwicklung."}
+  - {id: fue_quote, name: F&E-Quote, formel: fue / umsatz, einheit: prozent, positiv: [umsatz], erklaerung: "Forschung und Entwicklung in Prozent vom Umsatz."}
+  - {id: sbc_quote, name: Aktienvergütung / Umsatz, formel: sbc / umsatz, einheit: prozent, hoeher_besser: false, positiv: [umsatz], erklaerung: "Vergütung in Aktien in Prozent vom Umsatz. Echte Kosten, die im Free Cashflow nicht auftauchen, aber die Aktionäre verwässern."}
+
+bilanz:
+  - {id: cash, name: Cash, formel: cash, einheit: betrag, erklaerung: "Kasse und kurzfristige Anlagen."}
+  - {id: schulden, name: Gesamtschulden, formel: schulden, einheit: betrag, hoeher_besser: false, erklaerung: "Finanzschulden inklusive Leasing."}
+  - {id: nettoverschuldung, name: Nettoverschuldung, formel: schulden - cash, einheit: betrag, hoeher_besser: false, erklaerung: "Schulden minus Cash. Negativ: mehr Geld als Schulden."}
+  - {id: netto_ebitda, name: Nettoverschuldung / EBITDA, formel: (schulden - cash) / ebitda, einheit: faktor, hoeher_besser: false, positiv: [ebitda], nicht_fuer: [Financial Services], jahresbezug: true, erklaerung: "In wie vielen Jahren die Schulden aus dem EBITDA getilgt wären. Über 3 gilt als hoch."}
+  - {id: zinsdeckung, name: Zinsdeckung, formel: ebit / zinsaufwand, einheit: faktor, hoeher_besser: true, positiv: [zinsaufwand], nicht_fuer: [Financial Services], erklaerung: "Wie oft das EBIT die Zinsen deckt. Unter 3 wird es eng."}
+  - {id: liquiditaetsgrad, name: Liquiditätsgrad, formel: umlaufvermoegen / kurzfr_verbindlichkeiten, einheit: faktor, hoeher_besser: true, positiv: [kurzfr_verbindlichkeiten], nicht_fuer: [Financial Services], erklaerung: "Umlaufvermögen geteilt durch kurzfristige Verbindlichkeiten (Current Ratio). Unter 1: kurzfristige Rechnungen sind nicht voll gedeckt."}
+  - {id: ek_quote, name: Eigenkapitalquote, formel: eigenkapital / bilanzsumme, einheit: prozent, hoeher_besser: true, positiv: [bilanzsumme], erklaerung: "Anteil des Eigenkapitals an der Bilanzsumme."}
+  - {id: goodwill_anteil, name: Goodwill-Anteil, formel: goodwill / bilanzsumme, einheit: prozent, hoeher_besser: false, positiv: [bilanzsumme], erklaerung: "Firmenwert und immaterielle Werte aus Zukäufen in Prozent der Bilanzsumme. Hoch: Gefahr von Abschreibungen."}
+
+effizienz:
+  - {id: lagerumschlag, name: Lagerumschlag, formel: "umsatzkosten / mittel(lager, vj_lager)", einheit: faktor, hoeher_besser: true, positiv: [lager], nicht_fuer: [Financial Services], jahresbezug: true, erklaerung: "Wie oft sich das Lager im Jahr dreht."}
+  - {id: forderungslaufzeit, name: Forderungslaufzeit, formel: forderungen / umsatz * 365, einheit: tage, hoeher_besser: false, positiv: [umsatz], nicht_fuer: [Financial Services], jahresbezug: true, erklaerung: "Wie viele Tage Kunden im Schnitt bis zur Zahlung brauchen (DSO)."}
+  - {id: wc_quote, name: Working Capital / Umsatz, formel: working_capital / umsatz, einheit: prozent, positiv: [umsatz], nicht_fuer: [Financial Services], jahresbezug: true, erklaerung: "Im Geschäft gebundenes Umlaufvermögen in Prozent vom Jahresumsatz."}
+  - {id: umsatz_mitarbeiter, name: Umsatz je Mitarbeiter, formel: umsatz / mitarbeiter, einheit: betrag, hoeher_besser: true, positiv: [mitarbeiter], jahresbezug: true, erklaerung: "Jahresumsatz je Mitarbeiter (Mitarbeiterzahl heute laut Yahoo)."}
+
+aktionaersrendite:
+  - {id: dividenden, name: Dividenden, formel: dividenden, einheit: betrag, erklaerung: "Ausgezahlte Dividenden."}
+  - {id: ausschuettungsquote, name: Ausschüttungsquote, formel: dividenden / nettogewinn, einheit: prozent, positiv: [nettogewinn], erklaerung: "Welcher Teil des Gewinns als Dividende ausgezahlt wird."}
+  - {id: rueckkauf, name: Aktienrückkäufe, formel: rueckkauf, einheit: betrag, erklaerung: "Geld für den Rückkauf eigener Aktien."}
+  - {id: aktien_veraenderung, name: Veränderung der Aktienzahl, formel: aktien / vj_aktien - 1, einheit: prozent, hoeher_besser: false, positiv: [vj_aktien], erklaerung: "Zum Vorjahr. Negativ: Rückkäufe verringern die Aktienzahl, jeder Aktionär besitzt mehr."}
+  - {id: shareholder_yield, name: Shareholder Yield, formel: (dividenden + rueckkauf) / boersenwert, einheit: prozent, hoeher_besser: true, positiv: [boersenwert], jahresbezug: true, erklaerung: "Dividenden plus Rückkäufe im Verhältnis zum Börsenwert."}
+
+bewertung:
+  - {id: kgv, name: KGV, formel: kurs / eps, einheit: faktor, hoeher_besser: false, positiv: [eps], jahresbezug: true, erklaerung: "Kurs geteilt durch den Gewinn je Aktie der letzten 12 Monate. Bei Verlust n. a."}
+  - {id: fwd_kgv, name: Forward-KGV, formel: fwd_kgv, einheit: faktor, hoeher_besser: false, aktuell: true, erklaerung: "Kurs geteilt durch den erwarteten Gewinn je Aktie der nächsten 12 Monate (Yahoo)."}
+  - {id: peg, name: PEG, formel: peg, einheit: faktor, hoeher_besser: false, aktuell: true, erklaerung: "Forward-KGV geteilt durch das erwartete Gewinnwachstum. Um 1: Bewertung passt zum Wachstum."}
+  - {id: ev_ebitda, name: EV / EBITDA, formel: ev / ebitda, einheit: faktor, hoeher_besser: false, positiv: [ebitda], nicht_fuer: [Financial Services], jahresbezug: true, erklaerung: "Unternehmenswert (Börsenwert plus Nettoschulden) geteilt durch das EBITDA. Vergleicht Firmen unabhängig von ihrer Finanzierung."}
+  - {id: ev_umsatz, name: EV / Umsatz, formel: ev / umsatz, einheit: faktor, hoeher_besser: false, positiv: [umsatz], nicht_fuer: [Financial Services], jahresbezug: true, erklaerung: "Unternehmenswert geteilt durch den Umsatz."}
+  - {id: kuv, name: KUV, formel: boersenwert / umsatz, einheit: faktor, hoeher_besser: false, positiv: [umsatz], jahresbezug: true, erklaerung: "Börsenwert geteilt durch den Umsatz."}
+  - {id: kbv, name: KBV, formel: boersenwert / eigenkapital, einheit: faktor, hoeher_besser: false, positiv: [eigenkapital], erklaerung: "Börsenwert geteilt durch das Eigenkapital (Buchwert)."}
+  - {id: fcf_rendite, name: FCF-Rendite, formel: fcf / boersenwert, einheit: prozent, hoeher_besser: true, positiv: [boersenwert], jahresbezug: true, nicht_fuer: [Financial Services], erklaerung: "Free Cashflow im Verhältnis zum Börsenwert, der Kehrwert des Kurs-Cashflow-Verhältnisses."}
+  - {id: div_rendite, name: Dividendenrendite, formel: div_rendite, einheit: prozent, hoeher_besser: true, aktuell: true, erklaerung: "Dividende der letzten 12 Monate geteilt durch den Kurs."}
+
+qualitaet:
+  - {id: rule_of_40, name: Rule of 40, formel: (umsatz / vj_umsatz - 1) + fcf / umsatz, einheit: prozent, hoeher_besser: true, positiv: [vj_umsatz, umsatz], nicht_fuer: [Financial Services], erklaerung: "Umsatzwachstum plus FCF-Marge. Über 40 % gilt bei Software als gesund (schnelles Wachstum oder hohe Marge)."}
+  - {id: piotroski, name: Piotroski F-Score, formel: piotroski, einheit: punkte, hoeher_besser: true, aktuell: true, erklaerung: "9 Ja/Nein-Prüfungen zu Gewinn, Cashflow, Verschuldung, Liquidität, Verwässerung, Marge und Umschlag (letzte 12 Monate gegen das Jahr davor). 8 bis 9 stark, 0 bis 2 schwach."}
+  - {id: altman_z, name: Altman Z-Score, formel: altman_z, einheit: zahl, hoeher_besser: true, aktuell: true, nicht_fuer: [Financial Services, Real Estate], erklaerung: "Insolvenz-Frühwarnwert aus fünf Bilanzverhältnissen. Über 3 sicher, unter 1,8 gefährdet. Für Banken und Immobilienfirmen ungeeignet."}
+
+markt:
+  - {id: kursziel_abstand, name: Abstand zum Kursziel, formel: kursziel_abstand, einheit: prozent, hoeher_besser: true, aktuell: true, erklaerung: "Durchschnittliches Analysten-Kursziel gegen den Kurs."}
+  - {id: rating, name: Analysten-Rating, formel: rating, einheit: zahl, hoeher_besser: false, aktuell: true, erklaerung: "Durchschnittliche Empfehlung von 1 (stark kaufen) bis 5 (verkaufen)."}
+  - {id: schaetzung_1m, name: Schätzungs-Trend 1 Monat, formel: schaetzung_1m, einheit: prozent, hoeher_besser: true, aktuell: true, erklaerung: "Veränderung der Gewinnschätzung für das nächste Geschäftsjahr in den letzten 30 Tagen."}
+  - {id: schaetzung_3m, name: Schätzungs-Trend 3 Monate, formel: schaetzung_3m, einheit: prozent, hoeher_besser: true, aktuell: true, erklaerung: "Veränderung der Gewinnschätzung für das nächste Geschäftsjahr in den letzten 90 Tagen."}
+  - {id: wachstum_2j, name: Erwartetes Gewinnwachstum (2 J.), formel: wachstum_2j, einheit: prozent, hoeher_besser: true, aktuell: true, erklaerung: "Jährliches Wachstum vom Gewinn je Aktie der letzten 12 Monate bis zur Schätzung für das nächste Geschäftsjahr (etwa 2 Jahre)."}
+  - {id: short_quote, name: Short Interest, formel: short_quote, einheit: prozent, aktuell: true, erklaerung: "Leerverkaufte Aktien in Prozent des Streubesitzes (zweimal im Monat gemeldet, nur US)."}
+  - {id: insider_netto, name: Insider netto (6 Monate), formel: insider_netto, einheit: prozent, aktuell: true, erklaerung: "Netto gekaufte (+) oder verkaufte (−) Aktien der Insider in Prozent ihres Bestands, letzte 6 Monate."}
+  - {id: institutionell, name: Anteil Institutionelle, formel: institutionell, einheit: prozent, aktuell: true, erklaerung: "Anteil der Aktien bei Fonds, Banken und Versicherungen."}
+
+# Gespeicherte Kennzahl-Sets (Start). Eigene Sets speichert jeder Benutzer selbst.
+sets:
+  ki_capex: {name: KI-Capex-Check, kennzahlen: [capex, capex_umsatz, abschreibung_capex, fcf_marge, umsatz]}
+  bilanz: {name: Bilanz-Check, kennzahlen: [netto_ebitda, zinsdeckung, liquiditaetsgrad, altman_z]}
+  qualitaet: {name: Qualität, kennzahlen: [roic, fcf_marge, cash_umwandlung, piotroski]}
+  bewertung: {name: Bewertung, kennzahlen: [fwd_kgv, peg, ev_ebitda, fcf_rendite]}

@@ -1,0 +1,271 @@
+# Themen für das Themen-Ranking in Vinter.
+# Du kannst Themen und Werte frei ändern, ergänzen oder löschen. Speichern genügt,
+# beim nächsten Laden der Seite ist alles da.
+#
+# Format: Yahoo-Ticker: Anzeigename
+#   US-Werte ohne Endung (NVDA), Deutschland .DE, Paris .PA, Amsterdam .AS, Mailand .MI,
+#   Madrid .MC, London .L, Schweiz .SW, Stockholm .ST, Oslo .OL, Kopenhagen .CO, Wien .VI
+# Den richtigen Ticker findest du auf finance.yahoo.com über die Suche.
+# Ticker, die YAML als Ja/Nein lesen würde (ON, OFF, YES, NO, Y, N), in Anführungszeichen setzen: "ON".
+#
+# Eigene Logos (optional): Lege eine Bilddatei mit dem Ticker als Namen in daten/markt/logos/,
+# z. B. daten/markt/logos/NVDA.png (erlaubt sind .png, .svg, .jpg, .webp). Ohne Logo steht nur der Ticker da.
+
+themen:
+  - name: Halbleiter
+    werte:
+      NVDA: NVIDIA
+      AMD: AMD
+      AVGO: Broadcom
+      TSM: TSMC
+      ASML.AS: ASML
+      MU: Micron
+      INTC: Intel
+      QCOM: Qualcomm
+      TXN: Texas Instruments
+      ADI: Analog Devices
+      MRVL: Marvell
+      ARM: Arm
+      LRCX: Lam Research
+      AMAT: Applied Materials
+      KLAC: KLA
+      IFX.DE: Infineon
+      STMPA.PA: STMicroelectronics
+      "ON": ON Semiconductor   # in Anführungszeichen, sonst liest YAML "ON" als "ja"
+
+  - name: Hyperscaler & Cloud
+    werte:
+      MSFT: Microsoft
+      AMZN: Amazon
+      GOOGL: Alphabet
+      META: Meta
+      ORCL: Oracle
+      IBM: IBM
+      BABA: Alibaba
+      SNOW: Snowflake
+      NET: Cloudflare
+      DDOG: Datadog
+      MDB: MongoDB
+      DOCN: DigitalOcean
+
+  - name: KI-Infrastruktur & Neoclouds
+    werte:
+      CRWV: CoreWeave
+      NBIS: Nebius
+      SMCI: Super Micro
+      DELL: Dell
+      HPE: HP Enterprise
+      ANET: Arista
+      VRT: Vertiv
+      CLS: Celestica
+      APLD: Applied Digital
+      IREN: IREN
+      CIFR: Cipher Mining
+      EQIX: Equinix
+      DLR: Digital Realty
+      COHR: Coherent
+      LITE: Lumentum
+      CRDO: Credo
+      ALAB: Astera Labs
+
+  - name: KI-Strom & Versorger
+    werte:
+      VST: Vistra
+      CEG: Constellation
+      NRG: NRG Energy
+      TLN: Talen Energy
+      NEE: NextEra
+      SO: Southern Company
+      DUK: Duke Energy
+      AEP: American Electric Power
+      ETR: Entergy
+      GEV: GE Vernova
+      BE: Bloom Energy
+      ENR.DE: Siemens Energy
+      RWE.DE: RWE
+      EOAN.DE: E.ON
+
+  - name: Atomkraft & Uran
+    werte:
+      CCJ: Cameco
+      NXE: NexGen Energy
+      UEC: Uranium Energy
+      DNN: Denison Mines
+      UUUU: Energy Fuels
+      LEU: Centrus Energy
+      OKLO: Oklo
+      SMR: NuScale
+      NNE: Nano Nuclear
+      BWXT: BWX Technologies
+      KAP.IL: Kazatomprom
+
+  - name: Netze & Elektrotechnik
+    werte:
+      ETN: Eaton
+      PWR: Quanta Services
+      HUBB: Hubbell
+      EME: EMCOR
+      MYRG: MYR Group
+      POWL: Powell Industries
+      SIE.DE: Siemens
+      SU.PA: Schneider Electric
+      ABBN.SW: ABB
+      PRY.MI: Prysmian
+      NEX.PA: Nexans
+      NKT.CO: NKT
+
+  - name: Software
+    werte:
+      CRM: Salesforce
+      NOW: ServiceNow
+      ADBE: Adobe
+      SAP.DE: SAP
+      INTU: Intuit
+      WDAY: Workday
+      PLTR: Palantir
+      SHOP: Shopify
+      TEAM: Atlassian
+      HUBS: HubSpot
+      ADSK: Autodesk
+      CDNS: Cadence
+      SNPS: Synopsys
+      APP: AppLovin
+
+  - name: Cybersecurity
+    werte:
+      CRWD: CrowdStrike
+      PANW: Palo Alto Networks
+      FTNT: Fortinet
+      ZS: Zscaler
+      OKTA: Okta
+      S: SentinelOne
+      VRNS: Varonis
+      CHKP: Check Point
+      QLYS: Qualys
+      TENB: Tenable
+      RPD: Rapid7
+
+  - name: Rüstung
+    werte:
+      RHM.DE: Rheinmetall
+      HAG.DE: Hensoldt
+      R3NK.DE: Renk
+      BA.L: BAE Systems
+      LDO.MI: Leonardo
+      HO.PA: Thales
+      SAAB-B.ST: Saab
+      KOG.OL: Kongsberg
+      LMT: Lockheed Martin
+      RTX: RTX
+      NOC: Northrop Grumman
+      GD: General Dynamics
+      LHX: L3Harris
+      KTOS: Kratos
+      AVAV: AeroVironment
+
+  - name: Robotaxi & Mobilität
+    werte:
+      UBER: Uber
+      LYFT: Lyft
+      TSLA: Tesla
+      GOOGL: Alphabet (Waymo)
+      BIDU: Baidu (Apollo Go)
+      PONY: Pony.ai
+      WRD: WeRide
+      MBLY: Mobileye
+      GRAB: Grab
+      XPEV: XPeng
+      DASH: DoorDash
+
+  - name: Rohstoffe & Seltene Erden
+    werte:
+      MP: MP Materials
+      LYC.AX: Lynas
+      USAR: USA Rare Earth
+      FCX: Freeport-McMoRan
+      BHP: BHP
+      RIO: Rio Tinto
+      VALE: Vale
+      SCCO: Southern Copper
+      TECK: Teck Resources
+      ALB: Albemarle
+      SQM: SQM
+      AA: Alcoa
+      GLEN.L: Glencore
+      NEM: Newmont
+
+  - name: Öl & Gas
+    werte:
+      XOM: ExxonMobil
+      CVX: Chevron
+      COP: ConocoPhillips
+      OXY: Occidental
+      EOG: EOG Resources
+      SLB: SLB
+      HAL: Halliburton
+      SHEL: Shell
+      BP: BP
+      TTE.PA: TotalEnergies
+      ENI.MI: Eni
+      EQNR.OL: Equinor
+      REP.MC: Repsol
+      OMV.VI: OMV
+
+  - name: Banken
+    werte:
+      JPM: JPMorgan
+      BAC: Bank of America
+      C: Citigroup
+      WFC: Wells Fargo
+      GS: Goldman Sachs
+      MS: Morgan Stanley
+      DBK.DE: Deutsche Bank
+      CBK.DE: Commerzbank
+      BNP.PA: BNP Paribas
+      SAN.MC: Santander
+      UCG.MI: UniCredit
+      ISP.MI: Intesa Sanpaolo
+      HSBA.L: HSBC
+      UBSG.SW: UBS
+      INGA.AS: ING
+
+  - name: Konsum
+    werte:
+      WMT: Walmart
+      COST: Costco
+      HD: Home Depot
+      MCD: McDonald's
+      SBUX: Starbucks
+      NKE: Nike
+      KO: Coca-Cola
+      PEP: PepsiCo
+      PG: Procter & Gamble
+      LULU: Lululemon
+      MC.PA: LVMH
+      RMS.PA: Hermès
+      OR.PA: L'Oréal
+      ADS.DE: Adidas
+      PUM.DE: Puma
+      ZAL.DE: Zalando
+      NESN.SW: Nestlé
+
+  - name: Gesundheit
+    werte:
+      LLY: Eli Lilly
+      NVO: Novo Nordisk
+      JNJ: Johnson & Johnson
+      UNH: UnitedHealth
+      ABBV: AbbVie
+      MRK: Merck & Co.
+      PFE: Pfizer
+      AZN: AstraZeneca
+      ISRG: Intuitive Surgical
+      TMO: Thermo Fisher
+      VRTX: Vertex
+      AMGN: Amgen
+      HIMS: Hims & Hers
+      NOVN.SW: Novartis
+      RO.SW: Roche
+      SAN.PA: Sanofi
+      BAYN.DE: Bayer
+      SHL.DE: Siemens Healthineers

@@ -1,0 +1,11 @@
+# Nur das Nötige ins Add-on-Bild: nie .env, daten/, CSV-Exporte oder Bilder.
+*
+!app
+!vorlagen
+!requirements.txt
+!run.sh
+**/__pycache__
+**/*.pyc
+**/.env
+**/*.csv
+**/*.sqlite

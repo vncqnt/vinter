@@ -1,0 +1,1200 @@
+<!doctype html>
+<html lang="de" data-theme="dark" data-stil="vinter">
+<head>
+  <meta charset="utf-8">
+  <meta name="theme-color" content="#070b08">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Vinter</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="/symbole/favicon-32.png">
+  <link rel="apple-touch-icon" href="/symbole/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Vinter">
+  <link rel="preload" href="schriften/unbounded-400-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="schriften/manrope-400-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css?v=223">
+  <link rel="stylesheet" href="vinter.css?v=1">
+</head>
+<body>
+  <canvas id="lava" aria-hidden="true"></canvas>
+  <header class="leiste">
+    <div class="links">
+    <div class="menue" id="menue">
+      <button class="menue-knopf" id="menue-knopf" type="button" aria-label="Menü" aria-expanded="false" aria-controls="menue-liste">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    <nav class="tabs" id="menue-liste" aria-label="Bereiche">
+      <div class="tab-gruppe">
+        <p class="tab-titel">Depot</p>
+        <a class="tab" href="#tafel" data-seite="tafel"><span>Dashboard</span></a>
+        <a class="tab" href="#uebersicht" data-seite="uebersicht"><span>Positionen</span></a>
+        <a class="tab" href="#performance" data-seite="performance"><span>Gewinn &amp; Verlust</span></a>
+        <a class="tab" href="#verteilung" data-seite="verteilung"><span>Verteilung</span></a>
+      </div>
+      <div class="tab-gruppe">
+        <p class="tab-titel">Markt</p>
+        <a class="tab" href="#maerkte" data-seite="maerkte"><span>Märkte</span></a>
+        <a class="tab" href="#weltkarte" data-seite="weltkarte"><span>Weltkarte</span></a>
+        <a class="tab" href="#stil" data-seite="stil"><span>Smart Money</span></a>
+        <a class="tab" href="#news" data-seite="news"><span>News</span></a>
+        <a class="tab" href="#kalender" data-seite="kalender"><span>Kalender</span></a>
+        <a class="tab" href="#prognosen" data-seite="prognosen"><span>Prognosen</span></a>
+      </div>
+      <div class="tab-gruppe">
+        <p class="tab-titel">Analyse</p>
+        <a class="tab" href="#risiko" data-seite="risiko"><span>Risiko</span></a>
+        <a class="tab" href="#stresstest" data-seite="stresstest"><span>Szenarien</span></a>
+      </div>
+      <div class="tab-gruppe">
+        <p class="tab-titel">Strategie</p>
+        <a class="tab" href="#thesen" data-seite="thesen"><span>Thesen</span></a>
+        <a class="tab" href="#watchlist" data-seite="watchlist"><span>Watchlist</span></a>
+        <a class="tab" href="#journal" data-seite="journal"><span>Journal</span></a>
+      </div>
+      <div class="tab-gruppe">
+        <p class="tab-titel">Konto</p>
+        <a class="tab" href="#einstellungen" data-seite="einstellungen"><span>Einstellungen</span></a>
+        <a class="tab" href="#status" data-seite="status"><span>Status</span></a>
+      </div>
+    </nav>
+    </div>
+    <a class="leiste-titel" href="#home" aria-label="Vinter, zur Startseite">Vinter</a>
+    </div>
+    <div class="kopf-markt" id="kopf-markt"></div>
+  </header>
+
+  <main>
+    <div class="seite" id="seite-home" hidden>
+      <section class="hero">
+        <!-- Logo, darunter Datum und ein Satz darüber, wie das Depot heute steht (füllt app.js) -->
+        <div class="hero-marke">
+          <h1 class="wortmarke">Vinter</h1>
+          <p class="hero-datum" id="hero-datum"></p>
+          <p class="hero-satz" id="hero-satz"></p>
+          <canvas class="led-tafel" id="led-tafel" role="img" aria-label="Tagesverlauf des Depots als Punktraster"></canvas>
+        </div>
+        <nav class="kacheln" aria-label="Werkzeuge">
+          <!-- Jede Kachel: laufende Nummer, Name, eine echte Zahl aus den Daten (füllt app.js) und was die Zahl ist. -->
+          <a class="kachel" href="#uebersicht"><span class="k-nr">01</span><b>Positionen</b><span class="k-wert" id="kw-uebersicht"></span><small>Depotwert</small></a>
+          <a class="kachel" href="#performance"><span class="k-nr">02</span><b>Gewinn &amp; Verlust</b><span class="k-wert" id="kw-performance"></span><small>Depot heute</small></a>
+          <a class="kachel" href="#verteilung"><span class="k-nr">03</span><b>Verteilung</b><span class="k-wert" id="kw-verteilung"></span><small>Anteil in US-Dollar</small></a>
+          <a class="kachel" href="#freibetrag"><span class="k-nr">04</span><b>Freibetrag</b><span class="k-wert" id="kw-freibetrag"></span><small>schon verbraucht</small></a>
+          <a class="kachel" href="#maerkte"><span class="k-nr">05</span><b>Märkte</b><span class="k-wert" id="kw-maerkte"></span><small>S&amp;P 500 heute</small></a>
+          <a class="kachel" href="#sektoren"><span class="k-nr">06</span><b>Sektoren</b><span class="k-wert" id="kw-sektoren"></span><small id="kw-sektoren-name">stärkster Sektor heute</small></a>
+          <a class="kachel" href="#themen"><span class="k-nr">07</span><b>Themen</b><span class="k-wert" id="kw-themen"></span><small id="kw-themen-name">stärkstes Thema heute</small></a>
+          <a class="kachel" href="#news"><span class="k-nr">08</span><b>News</b><span class="k-wert" id="kw-news"></span><small>Für dich relevant</small></a>
+          <a class="kachel" href="#kalender"><span class="k-nr">09</span><b>Kalender</b><span class="k-wert" id="kw-kalender"></span><small id="kw-kalender-name">nächster Termin</small></a>
+          <a class="kachel" href="#thesen"><span class="k-nr">10</span><b>Thesen</b><span class="k-wert" id="kw-thesen"></span><small>dokumentiert</small></a>
+        </nav>
+        <button id="runter" class="knopf" type="button">Gesamtansicht ↓</button>
+        <div class="hg-wahl" id="hg-wahl" role="group" aria-label="Hintergrund der Startseite"></div>
+      </section>
+
+      <section id="gesamt">
+        <h2 class="abschnitt">Gesamtansicht</h2>
+        <p id="g-status" class="sekundaer" role="status">Wird geladen …</p>
+        <div class="karten">
+          <article class="karte"><h2>Depotwert</h2><p class="kennzahl" id="g-wert">–</p><p class="sekundaer" id="g-einstand"></p></article>
+          <article class="karte"><h2>Gesamtergebnis</h2><p class="kennzahl" id="g-gv">–</p><p class="sekundaer" id="g-gv-prozent"></p></article>
+          <article class="karte"><h2>Realisiert dieses Jahr</h2><p class="kennzahl" id="g-real">–</p><p class="sekundaer" id="g-real-details"></p></article>
+        </div>
+        <div class="zwei">
+          <article class="karte">
+            <h2>Größte Positionen</h2>
+            <div id="g-positionen"></div>
+            <a class="mehr" href="#uebersicht">Alle Positionen</a>
+          </article>
+          <article class="karte">
+            <h2>Nächste Termine</h2>
+            <div id="g-termine"><p class="sekundaer">Wird geladen …</p></div>
+            <a class="mehr" href="#kalender">Zum Kalender</a>
+          </article>
+          <article class="karte">
+            <h2>Märkte</h2>
+            <div id="g-maerkte"><p class="sekundaer">Wird geladen …</p></div>
+            <a class="mehr" href="#maerkte">Alle Märkte</a>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <div class="seite" id="seite-tafel" hidden>
+      <div class="tafel-kopf">
+        <h1>Dashboard</h1>
+        <div class="tafel-steuerung">
+          <select id="tf-layout" aria-label="Layout wählen"></select>
+          <button class="knopf" id="tf-bearbeiten" type="button" aria-pressed="false">Bearbeiten</button>
+        </div>
+      </div>
+      <section class="tf-werkzeug" id="tf-werkzeug" hidden aria-label="Dashboard bearbeiten">
+        <p class="sekundaer">Widgets aufs Dashboard ziehen oder antippen. Auf dem Dashboard: ziehen zum Verschieben, rechte oder untere Kante bzw. Ecke ziehen für die Größe, × zum Entfernen. Kleine Lücken schließen sich von selbst.</p>
+        <div class="tf-vorrat" id="tf-vorrat"></div>
+        <p class="klein" id="tf-hinweis"></p>
+        <div class="tf-layout-knoepfe">
+          <button class="knopf" id="tf-wie-computer" type="button" hidden>Handy wie Computer</button>
+          <button class="knopf" id="tf-neu" type="button">Neues Layout</button>
+          <button class="knopf" id="tf-umbenennen" type="button">Umbenennen</button>
+          <button class="knopf" id="tf-loeschen" type="button">Layout löschen</button>
+        </div>
+      </section>
+      <p id="tf-status" class="sekundaer" role="status"></p>
+      <p id="tf-leer" class="sekundaer" hidden>Das Dashboard ist leer. Tippe auf „Bearbeiten“ und zieh Widgets hierher.</p>
+      <div class="tafel" id="tafel"></div>
+    </div>
+
+    <div class="seite" id="seite-uebersicht">
+    <h1>Positionen</h1>
+    <p id="status" class="sekundaer" role="status">Kurse werden geladen …</p>
+    <label class="knopf upload-knopf">Trade-Republic-Export hochladen
+      <input id="u-datei" type="file" accept=".csv,text/csv">
+    </label>
+    <p id="u-status" class="meldung" role="status" hidden></p>
+    <div id="meldungen"></div>
+
+    <section class="karten" id="karten" hidden>
+      <article class="karte">
+        <h2>Depotwert</h2>
+        <p class="kennzahl" id="wert"></p>
+        <p class="sekundaer" id="einstand"></p>
+      </article>
+      <article class="karte">
+        <h2>Gesamtergebnis</h2>
+        <p class="kennzahl" id="gv"></p>
+        <p class="sekundaer" id="gv-prozent"></p>
+      </article>
+      <article class="karte">
+        <h2>Realisierte Gewinne</h2>
+        <p class="kennzahl" id="real"></p>
+        <p class="sekundaer" id="real-details"></p>
+      </article>
+      <a class="karte karte-link" href="#freibetrag" id="frei-karte" hidden>
+        <h2>Freibetrag</h2>
+        <p class="kennzahl" id="frei-anteil"></p>
+        <p class="sekundaer" id="frei-details"></p>
+      </a>
+    </section>
+
+    <section class="karte tabelle" id="tabelle" hidden aria-label="Positionen">
+      <div class="zeile kopf">
+        <span>Position</span><span>Stück</span><span>Einstand</span><span>Kurs</span><span>Wert</span><span>KGV</span><span>Gewinn/Verlust</span>
+      </div>
+      <div id="positionen"></div>
+    </section>
+
+    <p class="hinweis" id="hinweis" hidden>Einstand inklusive Gebühren, nach FIFO gerechnet. Der Einstandskurs kann deshalb von der Anzeige in der Trade-Republic-App abweichen. KGV (einmal täglich aktualisiert): Gewinn der letzten 12 Monate, verglichen mit dem KGV (Ø) des passenden US-Sektor-ETFs. Billig heißt mehr als 20 % unter dem Sektor, teuer mehr als 25 % darüber. Bei zyklischen Werten kann ein niedriges KGV täuschen, weil der Gewinn gerade auf dem Hoch sein kann. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-performance" hidden>
+      <h1>Gewinn &amp; Verlust</h1>
+      <section class="karte tageschart" aria-labelledby="c-titel">
+        <div class="c-wahl">
+          <div class="filter" id="c-zeitraum" role="group" aria-label="Zeitraum des Charts"></div>
+          <div class="filter" id="c-laenge" role="group" aria-label="Länge einer Kerze"></div>
+          <div class="filter" id="c-vorboerse" role="group" aria-label="Ansicht des Tagescharts">
+            <button type="button" data-vorboerse="an" title="US-Aktien bewegen sich schon vor 15:30 mit ihrem Kurs an deutschen Börsen (z. B. Xetra), so wie in deinem Depot bei Trade Republic.">Mit Vorbörse</button>
+            <button type="button" data-vorboerse="tr" title="So nah wie möglich am Chart in Trade Republic, 8 bis 23 Uhr: zu jeder Minute der jüngste Kurs aus Heimatbörse, Xetra und Frankfurt, Vergleich mit dem letzten Kurs gestern, ohne Krypto. Nicht identisch, weil die Kurse der LS Exchange nicht frei verfügbar sind.">Trade Republic</button>
+            <button type="button" data-vorboerse="ny" title="Nur die Bewegung seit der Eröffnung in New York (15:30 Uhr, in den Wochen der Zeitumstellung 14:30 Uhr). Der Chart startet dort bei 0 %.">New York Open</button>
+          </div>
+        </div>
+        <h2 id="c-titel">Depot heute</h2>
+        <p class="kennzahl" id="c-wert">–</p>
+        <p class="sekundaer" id="c-details" role="status">Wird geladen …</p>
+        <div class="c-flaeche" id="c-flaeche">
+          <svg id="c-svg" tabindex="0" role="img" aria-label="Tagesverlauf des Depots in Prozent"></svg>
+          <div class="c-tip" id="c-tip" hidden></div>
+        </div>
+        <p class="zoom-leiste" id="c-zoom"></p>
+      </section>
+      <section class="karte perioden" aria-label="Gewinn und Verlust nach Zeitraum">
+        <div class="perioden-wahl">
+          <div class="filter" id="p-filter" role="group" aria-label="Zeitraum wählen">
+            <button type="button" data-zeit="tag">Tag</button>
+            <button type="button" class="p-ny" data-zeit="ny" title="Wie sich dein Depot seit der Eröffnung in New York heute entwickelt hat (15:30 Uhr, in den Wochen der Zeitumstellung 14:30 Uhr). Die Bewegung davor zählt nicht.">NY Open</button>
+            <button type="button" data-zeit="woche">Woche</button>
+            <button type="button" data-zeit="monat">Monat</button>
+            <button type="button" data-zeit="ytd">Seit Jahresbeginn</button>
+            <button type="button" data-zeit="jahr">1 Jahr</button>
+          </div>
+          <select id="p-position" aria-label="Position wählen"><option value="">Alle Positionen</option></select>
+        </div>
+        <p class="kennzahl" id="p-summe"></p>
+        <p class="sekundaer" id="p-details" role="status">Wird berechnet …</p>
+        <div class="sektor-liste" id="p-liste"></div>
+      </section>
+      <label class="schwelle">Akzentfarbe neutral, solange sich das Depot heute um weniger als ±
+        <input id="s-schwelle" type="number" min="0" max="5" step="0.1" inputmode="decimal"> % bewegt
+      </label>
+      <p class="hinweis">Käufe zählen nicht als Gewinn, Verkäufe im Zeitraum sind enthalten, Dividenden nicht. Die Prozentzahl fürs ganze Depot bezieht sich auf das im Zeitraum im Schnitt investierte Geld; Geld, das mehrfach umgeschichtet wurde, zählt so nur einmal. Tag ist der jüngste Handelstag, Werte einer noch geschlossenen Börse bewegen sich deshalb nur mit dem Wechselkurs. Der Chart rechnet beim Zeitraum Tag aus Minutenkursen von Yahoo, bei längeren Zeiträumen aus Tagesschlusskursen; dort zählen nur echte Kursbewegungen, Käufe und Einzahlungen verschieben die Linie nicht. Europäische Werte sind dort rund 15 Minuten verzögert, sein letzter Wert kann deshalb leicht vom Tageswert darunter abweichen. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-verteilung" hidden>
+      <section id="verteilung">
+        <h1>Verteilung</h1>
+        <label class="schwelle">Warnen, wenn ein Thema über
+          <input id="v-schwelle" type="number" min="1" max="100" step="1" inputmode="numeric"> % liegt
+        </label>
+        <div id="v-meldungen"></div>
+        <div class="v-raster" id="v-karten"></div>
+        <p class="hinweis">Themen, Themengruppen und Korrekturen pflegst du in daten/benutzer/&lt;dein Name&gt;/verteilung.yaml. ETFs zählen vereinfacht komplett in ihrer Fondswährung, das tatsächliche Währungsrisiko ist bei Welt-ETFs etwas breiter verteilt.</p>
+      </section>
+    </div>
+
+    <div class="seite" id="seite-freibetrag" hidden>
+      <h1>Freibetrag</h1>
+      <p id="f-status" class="sekundaer" role="status">Wird berechnet …</p>
+      <div id="f-meldungen"></div>
+      <div class="karten" id="f-karten" hidden>
+        <article class="karte">
+          <h2>Sparerpauschbetrag verbraucht</h2>
+          <p class="kennzahl" id="f-verbraucht"></p>
+          <p class="sekundaer" id="f-von"></p>
+          <div class="v-spur"><div class="v-balken" id="f-balken"></div></div>
+        </article>
+        <article class="karte">
+          <h2>Noch frei</h2>
+          <p class="kennzahl" id="f-frei"></p>
+          <p class="sekundaer" id="f-ueber"></p>
+        </article>
+      </div>
+      <section class="karte f-liste" id="f-posten" hidden aria-label="Zusammensetzung"></section>
+      <p class="hinweis">Nur eine Schätzung, maßgeblich ist die Steuerbescheinigung von Trade Republic. Nicht berücksichtigt sind die Vorabpauschale bei thesaurierenden ETFs, Erträge bei anderen Banken und die Anrechnung ausländischer Quellensteuer. Krypto fällt nicht unter den Sparerpauschbetrag. Einstellungen stehen in daten/benutzer/&lt;dein Name&gt;/steuer.yaml.</p>
+    </div>
+
+    <div class="seite" id="seite-stil" hidden>
+      <h1>Faktoren &amp; Bewertung</h1>
+      <div id="gg-stil" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Information, keine Anlageberatung. Schätzungen sind als solche gekennzeichnet; Meldedaten sind teils Wochen alt.</p>
+    </div>
+
+    <div class="seite" id="seite-cashflow" hidden>
+      <h1>Free Cashflow</h1>
+      <div id="gg-cashflow" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Information, keine Anlageberatung. Schätzungen sind als solche gekennzeichnet; Meldedaten sind teils Wochen alt.</p>
+    </div>
+
+    <div class="seite" id="seite-positionierung" hidden>
+      <h1>Positionierung</h1>
+      <div id="gg-positionierung" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Information, keine Anlageberatung. Schätzungen sind als solche gekennzeichnet; Meldedaten sind teils Wochen alt.</p>
+    </div>
+
+    <div class="seite" id="seite-fonds" hidden>
+      <h1>13F &amp; Insider</h1>
+      <div id="gg-fonds" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Information, keine Anlageberatung. Schätzungen sind als solche gekennzeichnet; Meldedaten sind teils Wochen alt.</p>
+    </div>
+
+    <div class="seite" id="seite-signale" hidden>
+      <h1>Marktinterna</h1>
+      <div id="gg-signale" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Information, keine Anlageberatung. Schätzungen sind als solche gekennzeichnet; Meldedaten sind teils Wochen alt.</p>
+    </div>
+
+    <div class="seite" id="seite-nacht" hidden>
+      <h1>Über Nacht</h1>
+      <div id="gg-nacht" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Information, keine Anlageberatung. Kurse von Yahoo, bereinigt um Splits und Dividenden.</p>
+    </div>
+
+    <div class="seite" id="seite-geldfluss" hidden>
+      <h1>Geldfluss</h1>
+      <p class="sekundaer">Fließt gerade Geld in Aktien hinein oder wird Liquidität abgezogen? Fünf Messungen, jede mit ihrer Statistik, was danach am Aktienmarkt geschah.</p>
+      <div id="gg-geldfluss" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Information, keine Anlageberatung. Quellen: FRED, FINRA, Investment Company Institute, Yahoo. Meldedaten sind teils Wochen alt; die Statistik nutzt nur Werte, die damals schon veröffentlicht waren.</p>
+    </div>
+
+    <div class="seite" id="seite-chartanalyse" hidden>
+      <h1>Chartanalyse</h1>
+      <div class="ca-wahl">
+        <select id="ca-wert" class="pv-select" aria-label="Wert aus Depot oder Watchlist"></select>
+        <form id="ca-suche-form" class="ca-suche-form" role="search"><input id="ca-suche" class="pv-select" placeholder="Ticker oder Name suchen" list="ca-vorschlaege" autocomplete="off" aria-label="Ticker suchen"><datalist id="ca-vorschlaege"></datalist><button type="submit" class="knopf">Analysieren</button></form>
+      </div>
+      <div id="ca-inhalt" class="gg-seite"></div>
+      <p class="klein gg-hinweis">Beschreibung des Charts, keine Kauf- oder Verkaufsempfehlung. Tageskurse von Yahoo, einmal pro Handelstag nach US-Börsenschluss neu gerechnet; der Kurs oben läuft live mit. Preise in der Handelswährung des Werts.</p>
+    </div>
+
+    <div class="seite" id="seite-fundament" hidden>
+      <h1>Fundamentalanalyse</h1>
+      <div id="fu-inhalt" class="gg-seite"></div>
+      <dialog class="these-dialog r-dialog rot-dialog fu-dialog" id="fu-dialog" aria-labelledby="fu-d-titel">
+        <div class="r-d-kopf"><h2 id="fu-d-titel"></h2><button type="button" class="knopf th-pfeil" aria-label="Schließen" onclick="this.closest('dialog').close()">×</button></div>
+        <div id="fu-d-inhalt"></div>
+      </dialog>
+      <p class="klein gg-hinweis">Zahlen aus den Geschäftsberichten (Yahoo, für US-Firmen ältere Quartale von der SEC), Kurse und Analystenschätzungen von Yahoo. Werte "n. a.", wo eine Kennzahl nicht sinnvoll ist (z. B. kein KGV bei Verlust, kein EBITDA bei Banken). Information, keine Kauf- oder Verkaufsempfehlung.</p>
+    </div>
+
+    <div class="seite" id="seite-volumen" hidden>
+      <h1>Preis &amp; Volumen</h1>
+      <div class="pv-wahl">
+        <select id="pv-wert" class="pv-select" aria-label="Aktie wählen"></select>
+        <div class="filter" id="pv-zeitraum" role="group" aria-label="Zeitraum">
+          <button type="button" data-zeitraum="heute">Heute</button>
+          <button type="button" data-zeitraum="5t">5 Tage</button>
+          <button type="button" data-zeitraum="1m">1 Monat</button>
+          <button type="button" data-zeitraum="3m">3 Monate</button>
+          <button type="button" data-zeitraum="kauf">Seit Kauf</button>
+        </div>
+        <button type="button" class="knopf pv-schaetzung" id="pv-schaetzung" aria-pressed="false">Kauf/Verkauf schätzen</button>
+      </div>
+      <p id="pv-status" class="sekundaer" role="status">Wird geladen …</p>
+
+      <section class="karte th-karte" aria-labelledby="pv-titel">
+        <div class="th-kopf">
+          <h2 id="pv-titel">Kurs und Volumenprofil <button type="button" class="v-info-knopf" id="pv-info-knopf" aria-expanded="false" aria-controls="pv-info" aria-label="Erklärung: Was zeigt das Profil?">i</button></h2>
+          <p class="sekundaer" id="pv-stand"></p>
+        </div>
+        <div class="v-info" id="pv-info" hidden>
+          <p><b>Volumenprofil.</b> Die waagrechten Balken rechts zeigen, wie viele Aktien bei welchem Kurs gehandelt wurden. Das Volumen jeder Kerze wird dafür gleichmäßig auf die Kurse zwischen ihrem Tief und Hoch verteilt.</p>
+          <p><b>POC (Point of Control).</b> Der Kurs mit dem meisten Handel im Zeitraum, als durchgezogene Linie. Hier waren sich Käufer und Verkäufer am häufigsten einig.</p>
+          <p><b>Value Area.</b> Der hinterlegte Bereich um den POC, in dem 70 % des Volumens gehandelt wurden. Er zeigt, welche Kurse der Markt in dieser Zeit als fair angesehen hat.</p>
+          <p><b>Volumen-Lücken.</b> Schraffierte Bereiche, in denen weniger als ein Viertel des üblichen Volumens je Kursstufe lief. Durch solche Zonen ist der Kurs schnell hindurchgelaufen.</p>
+          <p><b>Deine Linien.</b> Einstandskurs und die Level aus deiner These. Daneben steht, ob dort viel Volumen (mindestens 1,3-fach des Durchschnitts je Stufe), wenig (höchstens die Hälfte) oder mittel gehandelt wurde. Liegt ein Level außerhalb, wurde dieser Kurs im Zeitraum nicht erreicht.</p>
+          <p><b>Ausreißer.</b> Goldene Punkte über dem Volumen markieren Kerzen mit mindestens dreifachem Normalvolumen. Normal heißt: Median zur gleichen Uhrzeit an den bis zu 20 Handelstagen davor, weil morgens und abends immer mehr gehandelt wird als mittags.</p>
+          <p><b>Kauf/Verkauf (Schätzung).</b> Steigende Kerzen zählen als Kaufvolumen, fallende als Verkaufsvolumen. Das ist nur eine grobe Näherung: Zu jedem Kauf gehört ein Verkauf, echte Orderdaten gibt es nicht kostenlos.</p>
+          <p><b>Daten.</b> Kerzen von Yahoo: US-Aktien von der Heimatbörse, deutsche über Xetra, nur reguläre Handelszeit. Heute und 5 Tage in Minuten, 1 Monat in 5 Minuten, 3 Monate in Stunden, seit Kauf je nach Dauer. Kurse mit dem heutigen Wechselkurs in Euro, damit sie zu deinen Euro-Leveln passen. Reine Information, kein Kauf- oder Verkaufssignal.</p>
+        </div>
+        <div class="pv-flaeche" id="pv-flaeche">
+          <canvas id="pv-canvas" role="img" aria-label="Kurschart mit Volumenprofil"></canvas>
+          <div class="c-tip pv-tip" id="pv-tip" hidden></div>
+        </div>
+        <div class="pv-legende" id="pv-legende"></div>
+        <div class="pv-level" id="pv-level"></div>
+      </section>
+
+      <section class="karte th-karte" aria-labelledby="pv-rv-titel">
+        <div class="th-kopf">
+          <h2 id="pv-rv-titel">Relatives Volumen nach Uhrzeit <button type="button" class="v-info-knopf" id="pv-rv-info-knopf" aria-expanded="false" aria-controls="pv-rv-info" aria-label="Erklärung: relatives Volumen">i</button></h2>
+          <p class="sekundaer" id="pv-rv-stand"></p>
+        </div>
+        <div class="v-info" id="pv-rv-info" hidden>
+          <p><b>Was das zeigt.</b> Jeder Balken ist das Volumen von 5 Minuten am letzten Handelstag. Der Strich darüber ist der Durchschnitt derselben Uhrzeit an den 20 Handelstagen davor. Hervorgehoben sind Zeiten mit mindestens doppelt so viel Handel wie üblich.</p>
+          <p><b>Die große Zahl.</b> Volumen seit Handelsbeginn bis zur letzten fertigen 5-Minuten-Kerze, geteilt durch das, was bis zu dieser Uhrzeit sonst üblich ist. 1,0× heißt normal, 2,0× doppelt so viel. Viel Volumen zeigt nur, dass sich gerade viele für den Wert interessieren, nicht in welche Richtung es geht.</p>
+        </div>
+        <p class="kennzahl pv-rv-zahl" id="pv-rv-zahl"></p>
+        <p class="sekundaer" id="pv-rv-text"></p>
+        <div class="pv-rv-flaeche"><canvas id="pv-rv-canvas" role="img" aria-label="Volumen je 5 Minuten gegen den Durchschnitt"></canvas><div class="c-tip pv-tip" id="pv-rv-tip" hidden></div></div>
+      </section>
+      <p class="hinweis">Reine Information, keine Anlageberatung. Volumen zeigt, wo gehandelt wurde, nicht wohin der Kurs geht.</p>
+    </div>
+
+    <div class="seite" id="seite-watchlist" hidden>
+      <h1>Watchlist</h1>
+      <p id="w-status" class="sekundaer" role="status">Wird geladen …</p>
+      <form class="w-suche" id="w-form" autocomplete="off" role="search">
+        <input id="w-eingabe" type="search" placeholder="Aktie suchen, z. B. Apple oder SAP" aria-label="Wert für die Watchlist suchen" maxlength="60">
+        <div class="w-treffer" id="w-treffer" hidden></div>
+      </form>
+      <p id="w-meldung" class="meldung" role="alert" hidden></p>
+      <section class="karte w-liste" id="w-liste" aria-label="Beobachtete Werte" hidden></section>
+      <section class="karte th-karte w-alarme" id="w-alarme" aria-label="Preisalarme"></section>
+      <p class="hinweis">Als außergewöhnlich gilt eine Tagesbewegung von mindestens 4 % und mindestens dem 4-Fachen der üblichen Schwankung dieses Werts in den letzten 60 Handelstagen. Solche Bewegungen erscheinen auch in der Leiste oben, im Schnitt etwa ein- bis zweimal pro Aktie und Jahr. Die Veränderung ist in der Handelswährung gerechnet, der Kurs in Euro. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-thesen" hidden>
+      <div class="thesen-kopf">
+        <h1>Thesen</h1>
+        <div class="thesen-knoepfe">
+          <button class="knopf" id="t-bericht" type="button" title="Markdown-Datei mit allen Thesen, News der Woche, Kursen und Exit-Abständen, für deinen Sonntags-Check mit Claude">Wochenbericht exportieren</button>
+          <button class="knopf" id="t-neu" type="button">Neue These</button>
+        </div>
+      </div>
+      <p id="t-bericht-status" class="sekundaer" role="status" hidden></p>
+      <p id="t-status" class="sekundaer" role="status">Thesen werden geladen …</p>
+      <div id="t-meldungen"></div>
+      <div class="filter" id="t-ansicht" role="group" aria-label="Ansicht wählen">
+        <button type="button" data-ansicht="thesen">Meine Thesen</button>
+        <button type="button" data-ansicht="news">News</button>
+      </div>
+      <div id="t-bereich-thesen">
+        <div class="thesen-liste" id="t-liste"></div>
+      </div>
+      <div id="t-bereich-news" hidden>
+        <label class="schwelle" for="t-schwelle">Mindest-Relevanz <b id="t-schwelle-wert"></b>
+          <input id="t-schwelle" class="regler" type="range" min="20" max="80" step="1">
+        </label>
+        <div class="filter" id="t-sortierung" role="group" aria-label="News sortieren">
+          <button type="button" data-sortierung="wichtig">Wichtigste</button>
+          <button type="button" data-sortierung="neueste">Neueste</button>
+          <button type="button" data-sortierung="dafuer">Eher dafür</button>
+          <button type="button" data-sortierung="dagegen">Eher dagegen</button>
+        </div>
+        <div class="thesen-liste" id="t-news"></div>
+        <p class="hinweis">Die Skala ist nur ein Hinweis. Das Modell misst, welchen deiner Signale eine Schlagzeile ähnelt, und versteht nicht, ob sie deine These wirklich stützt. Unter jeder Meldung steht deshalb, wozu sie passt, und bei den Warnungen solltest du selbst nachlesen.</p>
+      </div>
+      <p class="hinweis">Mehrere Ticker in einer These ergeben einen Ordner, zum Beispiel KI-Strom. Jede These liegt als Datei in daten/benutzer/&lt;dein Name&gt;/thesen. Gelöschte Thesen findest du dort im Unterordner papierkorb.</p>
+    </div>
+
+    <dialog id="t-dialog" class="these-dialog" aria-labelledby="t-titel">
+      <form id="t-form" novalidate>
+        <h2 id="t-titel">These bearbeiten</h2>
+        <label class="feld"><span>Name</span><input id="t-name" type="text" maxlength="80" required></label>
+        <label class="feld"><span>Ticker, mit Komma getrennt</span><input id="t-ticker" type="text" autocapitalize="characters" autocomplete="off" placeholder="UBER oder ENR.DE, VST, CEG"></label>
+        <label class="feld"><span>Kernthese (1 bis 2 Sätze)</span><textarea id="t-kernthese" rows="3" maxlength="2000"></textarea></label>
+        <label class="feld"><span>Katalysatoren, einer pro Zeile</span><textarea id="t-katalysatoren" rows="3"></textarea></label>
+        <label class="feld"><span>Bestätigungs-Signale, eines pro Zeile</span><textarea id="t-bestaetigung" rows="3"></textarea></label>
+        <label class="feld"><span>Bruch-Signale: Wann liege ich falsch? Eines pro Zeile</span><textarea id="t-bruch" rows="3"></textarea></label>
+        <label class="feld"><span>Themen für die News-Suche, eines pro Zeile</span><textarea id="t-news_themen" rows="3"></textarea></label>
+        <h3>Exit-Plan in Euro</h3>
+        <div id="t-exits"></div>
+        <p id="t-fehler" class="meldung" role="alert" hidden></p>
+        <div class="dialog-knoepfe">
+          <button class="knopf gefahr" id="t-loeschen" type="button">Löschen</button>
+          <span></span>
+          <button class="knopf" id="t-abbrechen" type="button">Abbrechen</button>
+          <button class="knopf primaer" type="submit">Speichern</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="al-dialog" class="these-dialog al-dialog" aria-labelledby="al-titel">
+      <h2 id="al-titel">Preisalarm</h2>
+      <p class="sekundaer" id="al-unter"></p>
+      <form id="al-form" class="al-form">
+        <label class="feld"><span>Preis</span><input id="al-preis" type="text" inputmode="decimal" autocomplete="off" required></label>
+        <label class="feld"><span>Notiz (optional)</span><input id="al-text" type="text" maxlength="120" placeholder="z. B. Nachkauf prüfen"></label>
+        <p class="klein sekundaer" id="al-richtung"></p>
+        <div class="dialog-knoepfe"><button class="knopf primaer" type="submit">Alarm setzen</button><span class="klein" id="al-meldung" role="status"></span><button class="knopf" id="al-schliessen" type="button">Schließen</button></div>
+      </form>
+      <div id="al-liste"></div>
+    </dialog>
+    <div class="al-toasts" id="al-toasts" aria-live="polite"></div>
+    <dialog id="mf-dialog" class="these-dialog mf-dialog" aria-labelledby="mf-titel">
+      <h2 id="mf-titel"></h2>
+      <p class="sekundaer" id="mf-unter"></p>
+      <div id="mf-inhalt"></div>
+      <div class="dialog-knoepfe">
+        <button class="knopf" id="mf-alarm" type="button">Preisalarm</button>
+        <button class="knopf" id="mf-chartanalyse" type="button">In der Chartanalyse öffnen</button>
+        <a class="knopf" id="mf-yahoo" target="_blank" rel="noopener">Yahoo Finance</a>
+        <button class="knopf" id="mf-schliessen" type="button">Schließen</button>
+      </div>
+    </dialog>
+    <dialog id="k-dialog" class="these-dialog" aria-labelledby="k-titel">
+      <h2 id="k-titel"></h2>
+      <p class="sekundaer" id="k-unter"></p>
+      <div id="k-inhalt"></div>
+      <div class="dialog-knoepfe">
+        <a class="knopf" id="k-link" target="_blank" rel="noopener">Bei Yahoo Finance ansehen</a>
+        <span></span>
+        <button class="knopf" id="k-schliessen" type="button">Schließen</button>
+      </div>
+    </dialog>
+
+    <div class="seite" id="seite-maerkte" hidden>
+      <h1>Märkte</h1>
+      <p id="m-status" class="sekundaer" role="status">Marktdaten werden geladen …</p>
+      <div id="m-gruppen"></div>
+      <p class="hinweis">Letzte verfügbare Schlusskurse von Yahoo, höchstens eine Stunde alt. Bei Renditen ist die Änderung in Basispunkten angegeben (1 Bp = 0,01 Prozentpunkte). Die VIX-Stufen sind gängige Faustregeln. Beim Öl zeigt die Skala, wo der Preis in seiner 12-Monats-Spanne steht. Das ist eine Einordnung, keine Prognose.</p>
+    </div>
+
+    <div class="seite" id="seite-weltkarte" hidden>
+      <h1>Weltkarte</h1>
+      <div id="wk-inhalt"></div>
+    </div>
+
+    <div class="seite" id="seite-handel" hidden>
+      <h1>Märkte</h1>
+      <div id="hd-inhalt"></div>
+      <dialog class="these-dialog r-dialog rot-dialog hd-dialog" id="hd-dialog" aria-labelledby="hd-d-titel">
+        <div class="r-d-kopf"><h2 id="hd-d-titel"></h2><button type="button" class="knopf th-pfeil" id="hd-d-zu" aria-label="Schließen" onclick="this.closest('dialog').close()">×</button></div>
+        <div id="hd-d-inhalt"></div>
+      </dialog>
+      <p class="hinweis">Handelszahlen aus offiziellen Quellen: chinesischer Zoll (vorläufige Monatswerte), US Census Bureau, UN Comtrade (Meldungen der Länder, oft Monate verspätet), TSMC Investor Relations, IMF PortWatch. Werte in US-Dollar; der TSMC-Umsatz ist mit dem Monatsdurchschnitt des Wechselkurses umgerechnet. Länder melden Waren unterschiedlich (Ursprung, Transport, Zeitpunkt), deshalb weichen Export- und Gegenmeldung voneinander ab. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-bewegung" hidden>
+      <h1>Märkte</h1>
+      <div id="bw-inhalt"></div>
+    </div>
+
+    <div class="seite" id="seite-sektoren" hidden>
+      <h1>Sektoren</h1>
+      <p id="s-status" class="sekundaer" role="status">Sektoren werden geladen …</p>
+      <div class="filter" id="s-filter" role="group" aria-label="Zeitraum wählen">
+        <button type="button" data-zeit="tag">Tag</button>
+        <button type="button" data-zeit="woche">Woche</button>
+        <button type="button" data-zeit="monat">Monat</button>
+        <button type="button" data-zeit="ytd">Seit Jahresbeginn</button>
+      </div>
+      <section class="m-gruppe">
+        <h2>US-Sektoren</h2>
+        <div class="heatmap" id="s-karte"></div>
+        <h2 class="s-unter">US-Branchen</h2>
+        <div class="heatmap" id="s-branchen"></div>
+      </section>
+      <p class="hinweis">Letzte verfügbare Schlusskurse von Yahoo, höchstens eine Stunde alt.</p>
+    </div>
+
+    <div class="seite" id="seite-themen" hidden>
+      <h1>Themen</h1>
+      <p id="th-status" class="sekundaer" role="status">Themen werden geladen …</p>
+      <div id="th-breite"></div>
+      <div class="filter" id="th-zeit" role="group" aria-label="Zeitraum wählen">
+        <button type="button" data-zeit="tag">Tag</button>
+        <button type="button" data-zeit="woche">Woche</button>
+        <button type="button" data-zeit="monat">Monat</button>
+        <button type="button" data-zeit="ytd">Seit Jahresbeginn</button>
+      </div>
+      <section class="karte th-karte" aria-labelledby="th-alle-titel">
+        <div class="th-kopf"><h2 id="th-alle-titel">Alle Themen</h2><p class="sekundaer" id="th-alle-unter"></p></div>
+        <div id="th-alle"></div>
+      </section>
+      <div class="th-wahl">
+        <button type="button" class="knopf th-pfeil" id="th-zurueck" aria-label="Voriges Thema">‹</button>
+        <select id="th-auswahl" aria-label="Thema wählen"></select>
+        <button type="button" class="knopf th-pfeil" id="th-weiter" aria-label="Nächstes Thema">›</button>
+      </div>
+      <section class="karte th-karte" id="th-karte" aria-labelledby="th-titel">
+        <div class="th-kopf"><h2 id="th-titel">Thema</h2><p class="sekundaer" id="th-unter"></p></div>
+        <div id="th-thema"></div>
+      </section>
+      <p class="hinweis">Veränderung in der Handelswährung der jeweiligen Aktie, aus Kursen von Yahoo (während der Handelszeit höchstens 5 Minuten alt, sonst stündlich, europäische Werte rund 15 Minuten verzögert). Gestrichelte Linien: S&amp;P 500, Nasdaq 100 und der gleichgewichtete Durchschnitt des Themas. Deine eigenen Positionen sind mit einem goldenen Punkt markiert. Themen und Werte bearbeitest du in daten/markt/themen.yaml. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-risiko" hidden>
+      <h1>Risiko</h1>
+      <p id="r-status" class="sekundaer" role="status">Wird berechnet …</p>
+      <div class="filter" id="r-zeitraum" role="group" aria-label="Zeitraum der Risiko-Rechnung">
+        <button type="button" data-zeit="3m">3 Monate</button>
+        <button type="button" data-zeit="6m">6 Monate</button>
+        <button type="button" data-zeit="1j">1 Jahr</button>
+        <button type="button" data-zeit="2j">2 Jahre</button>
+      </div>
+      <p class="hinweis r-tipp">Tipp: Fahr mit der Maus über Kreise, Balken und Kästchen für Details. Ein Klick auf eine Position öffnet ihr Detail-Fenster, ein Klick auf ein Kästchen der Heatmap vergleicht zwei Positionen.</p>
+      <div class="r-kennzahlen" id="r-kennzahlen"></div>
+      <section class="karte th-karte" aria-labelledby="r-roll-titel">
+        <div class="th-kopf"><h2 id="r-roll-titel">Wie sich das Risiko verändert hat</h2><p class="sekundaer">Schwankung deines heutigen Depots über die jeweils letzten rund 4 Wochen, hochgerechnet aufs Jahr, gegen den MSCI World. Steigt die Linie, wird es unruhiger.</p></div>
+        <div class="r-grafik" id="r-rollend"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="r-beitrag-titel">
+        <div class="th-kopf"><h2 id="r-beitrag-titel">Wer das Risiko trägt</h2><p class="sekundaer">Pro Position: grauer Balken = Anteil am Depotwert, farbiger Balken = Anteil an der Schwankung des Depots. Ist der farbige länger, bringt die Position mehr Risiko, als ihr Gewicht vermuten lässt.</p></div>
+        <div id="r-beitrag"></div>
+      </section>
+      <div class="r-zwei">
+        <section class="karte th-karte" aria-labelledby="r-streu-titel">
+          <div class="th-kopf r-kopf-mit-knopf"><div><h2 id="r-streu-titel">Schwankung gegen Marktnähe</h2><p class="sekundaer">Rechts = schwankt stärker, oben = reagiert stärker auf den Markt (Beta). Größe = Gewicht im Depot.</p></div><button type="button" class="knopf" id="r-streu-gross-knopf" title="Groß öffnen, mit Zoom">Vergrößern ⤢</button></div>
+          <div class="r-grafik" id="r-streu"></div>
+        </section>
+        <section class="karte th-karte" aria-labelledby="r-hist-titel">
+          <div class="th-kopf"><h2 id="r-hist-titel">So verteilen sich deine Tage</h2><p class="sekundaer" id="r-hist-unter"></p></div>
+          <div class="r-grafik" id="r-hist"></div>
+        </section>
+      </div>
+      <section class="karte th-karte" aria-labelledby="r-korr-titel">
+        <div class="th-kopf"><h2 id="r-korr-titel">Was sich gemeinsam bewegt</h2><p class="sekundaer">Korrelation der Tagesrenditen. Rot = bewegen sich fast gleich (keine echte Streuung), neutral = unabhängig, Mint = eher gegenläufig. Ähnliche Werte stehen nebeneinander, Blöcke zeigen Klumpen.</p></div>
+        <div class="r-korr" id="r-korr"></div>
+      </section>
+      <section class="karte th-karte" id="r-kr-karte" aria-labelledby="r-kr-titel">
+        <div class="th-kopf"><h2 id="r-kr-titel">Bewegt sich gerade alles gleich?</h2>
+          <p class="sekundaer">Durchschnittliche Korrelation zwischen deinen Positionen, rollierend über 60 Handelstage (dicke Linie) und 20 Handelstage (dünn), gewichtet nach Größe. 0 = unabhängig, 1 = alles bewegt sich wie eine einzige Aktie. Steigt die Linie, schützt die Streuung im Depot weniger; das passiert typischerweise in Krisen.</p></div>
+        <p class="r-kr-satz" id="r-kr-satz"></p>
+        <div class="r-grafik" id="r-kr-linie"></div>
+        <div id="r-kr-paare"></div>
+      </section>
+      <div class="r-zwei">
+        <section class="karte th-karte" aria-labelledby="r-dd-titel">
+          <div class="th-kopf"><h2 id="r-dd-titel">Tiefster Absturz je Position</h2><p class="sekundaer">Größter Rückgang vom Hoch im letzten Jahr (heller Balken) und wie weit die Position heute unter ihrem Hoch steht (Punkt).</p></div>
+          <div id="r-dd"></div>
+        </section>
+        <section class="karte th-karte" aria-labelledby="r-wasser-titel">
+          <div class="th-kopf"><h2 id="r-wasser-titel">Depot unter Wasser</h2><p class="sekundaer">Wie weit das heutige Depot im Lauf des Jahres unter seinem bisherigen Hoch lag.</p></div>
+          <div class="r-grafik" id="r-wasser"></div>
+        </section>
+      </div>
+      <dialog class="these-dialog r-dialog" id="r-dialog" aria-labelledby="r-d-titel">
+        <div class="r-d-kopf"><h2 id="r-d-titel"></h2><button type="button" class="knopf th-pfeil" id="r-d-zu" aria-label="Schließen">×</button></div>
+        <div id="r-d-inhalt"></div>
+      </dialog>
+      <p class="hinweis">Gerechnet mit den Tagesrenditen des gewählten Zeitraums in Euro und den heutigen Gewichten, so als hätte dein Depot das ganze Jahr so ausgesehen. Volatilität: Schwankung pro Jahr. Beta: wie stark eine Position im Schnitt mitgeht, wenn der MSCI World 1 % steigt oder fällt. Value at Risk (95 %): An 19 von 20 Tagen war der Verlust kleiner als dieser Betrag. Expected Shortfall: der durchschnittliche Verlust an den übrigen, schlechtesten Tagen. Diversifikation: wie viel Schwankung sich durch die Mischung gegenseitig aufhebt (1 = gar nicht). Die Vergangenheit ist keine Garantie für die Zukunft. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-stresstest" hidden>
+      <h1>Stresstest</h1>
+      <p id="st-status" class="sekundaer" role="status">Wird berechnet …</p>
+      <section class="karte th-karte" aria-labelledby="st-alle-titel">
+        <div class="th-kopf"><h2 id="st-alle-titel">Alle Krisen im Überblick</h2><p class="sekundaer">So viel hätte dein heutiges Depot in jeder Phase verloren. Klick auf eine Krise für die Details.</p></div>
+        <div class="r-grafik" id="st-alle"></div>
+      </section>
+      <div class="b-wahl">
+        <div class="filter" id="st-wahl" role="group" aria-label="Krise wählen"></div>
+        <label class="b-datum">von <input type="date" id="st-von" min="2000-01-01"></label>
+        <label class="b-datum">bis <input type="date" id="st-bis" min="2000-01-01"></label>
+      </div>
+      <p class="b-urteil" id="st-text"></p>
+      <div class="r-kennzahlen" id="st-kennzahlen"></div>
+      <section class="karte th-karte" aria-labelledby="st-linie-titel">
+        <div class="th-kopf"><h2 id="st-linie-titel">Verlauf in der Krise</h2><p class="sekundaer">Dein heutiges Depot gegen den MSCI World, beide starten bei 0 %.</p></div>
+        <div class="r-grafik" id="st-linie"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="st-abstand-titel">
+        <div class="th-kopf"><h2 id="st-abstand-titel">Woher der Unterschied zum Weltmarkt kommt</h2><p class="sekundaer" id="st-abstand-unter"></p></div>
+        <div class="r-grafik" id="st-abstand"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="st-ww-titel">
+        <div class="th-kopf"><h2 id="st-ww-titel">Was wäre, wenn …</h2><p class="sekundaer" id="st-ww-hinweis"></p></div>
+        <div class="ww">
+          <div class="ww-regler" id="st-ww-regler"></div>
+          <div class="ww-ergebnis">
+            <label class="ww-ziel">Umgeschichtetes Geld geht nach <select id="st-ww-ziel"></select></label>
+            <div class="ww-tabelle" id="st-ww-tabelle"></div>
+            <button type="button" class="knopf" id="st-ww-zurueck">Alles zurücksetzen</button>
+          </div>
+        </div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="st-pos-titel">
+        <div class="th-kopf"><h2 id="st-pos-titel">Deine Positionen in dieser Krise</h2><p class="sekundaer" id="st-pos-unter"></p></div>
+        <div class="r-grafik" id="st-positionen"></div>
+      </section>
+      <p class="hinweis">Gerechnet wird mit deinen heutigen Positionen und ihrem heutigen Wert, als hättest du sie damals schon gehabt. Jede Position macht die Kursbewegung mit, die sie in der Krise wirklich hatte, in Euro und damit samt Wechselkurs. Gab es eine Aktie damals noch nicht (mit ≈ markiert), schätzt Vinter ihren Verlust über ihr Beta zum MSCI World aus den letzten zwei Jahren: Beta 1,5 heißt, sie schwankte anderthalbmal so stark wie der Markt. „Tiefster Punkt“ ist der schlechteste Stand innerhalb der Phase. Was-wäre-wenn verteilt nur um: Der Depotwert bleibt gleich, Gebühren und Steuern beim Umschichten sind nicht eingerechnet. Die gelbe Linie im Verlauf zeigt die geänderte Verteilung. Krisen und Daten änderst du in daten/markt/stress_szenarien.yaml. Vergangene Krisen wiederholen sich nie genau gleich; das ist eine Orientierung, keine Vorhersage.</p>
+    </div>
+
+    <div class="seite" id="seite-makro" hidden>
+      <h1>Zins, Öl, Dollar</h1>
+      <p id="ms-status" class="sekundaer" role="status">Wird berechnet …</p>
+      <div class="filter" id="ms-jahre" role="group" aria-label="Zeitraum der Rechnung">
+        <button type="button" data-jahre="3">3 Jahre</button>
+        <button type="button" data-jahre="5">5 Jahre, mit Zinswende 2022</button>
+      </div>
+      <div class="filter" id="ms-ansicht" role="group" aria-label="Themen oder einzelne Werte">
+        <button type="button" data-ansicht="themen" title="Deine Themen aus der Verteilung (KI-Strom, Rüstung …). Mehrere Aktien zusammen rauschen weniger als eine: belastbarere Zahlen.">Nach Themen</button>
+        <button type="button" data-ansicht="werte">Einzelwerte</button>
+      </div>
+      <div class="filter" id="ms-markt" role="group" aria-label="Gesamtmarkt herausrechnen">
+        <button type="button" data-markt="ohne" title="Die normale Marktbewegung wird herausgerechnet. Übrig bleibt, wie eine Position zusätzlich auf Zins, Öl oder Dollar reagiert. Weniger Rauschen, belastbarere Zahlen.">Markt herausgerechnet</button>
+        <button type="button" data-markt="mit" title="Die ganze Bewegung in solchen Wochen, inklusive der Marktbewegung. Mehr Rauschen.">Gesamtwirkung</button>
+      </div>
+      <div class="r-kennzahlen" id="ms-kennzahlen"></div>
+      <div id="ms-faktoren"></div>
+      <p class="hinweis">Für jede Position rechnet Vinter aus den Wochenkursen (in Euro) eine Regression: Wie hat sie sich bewegt, wenn die 10-jährige US-Rendite, der Ölpreis (Brent) oder der Dollar-Index gestiegen sind? Alle drei werden gleichzeitig berücksichtigt, damit sich ihre Wirkungen nicht vermischen. Wochen statt Tage, weil US- und Europa-Börsen zu verschiedenen Zeiten schließen. Beim Dollar zählt der Wechselkurs mit: Ein starker Dollar macht US-Aktien für dich in Euro wertvoller. „Markt herausgerechnet“ nimmt den MSCI World als vierte Größe dazu: Dann zeigt die Zahl, wie eine Position über die normale Marktbewegung hinaus reagiert. Das nimmt viel Rauschen heraus. Weil der MSCI World in Euro selbst schon mit dem Dollar steigt, heißt ein Minus beim Dollar dort: Die Position profitiert weniger vom starken Dollar als der Weltmarkt. Die feine Linie an jedem Balken ist der wahrscheinliche Bereich (95-%-Vertrauensintervall). Blasse Balken sind statistisch unsicher (t-Wert unter 2): Der Zusammenhang könnte Zufall sein. „Nach Themen“ bündelt deine Positionen nach den Themen aus daten/benutzer/&lt;dein Name&gt;/verteilung.yaml (gewichtet nach ihrem Wert); Werte ohne Thema landen unter „Ohne Thema“. Aktien bewegen sich vor allem aus anderen Gründen; diese drei Größen erklären meist nur einen kleinen Teil. Vergangenheit, keine Vorhersage.</p>
+    </div>
+
+    <div class="seite" id="seite-rotation" hidden>
+      <h1>Sektorrotation</h1>
+      <p class="sekundaer">Welche Sektoren gerade gegenüber dem S&amp;P 500 führen, nachlassen, hinterherlaufen oder aufholen, und was das über die Konjunkturphase und den Risikoappetit sagt.</p>
+      <div id="rot-inhalt" class="gg-seite"></div>
+      <dialog class="these-dialog r-dialog rot-dialog" id="rot-dialog" aria-labelledby="rot-d-titel">
+        <div class="r-d-kopf"><h2 id="rot-d-titel"></h2><button type="button" class="knopf th-pfeil" id="rot-d-zu" aria-label="Schließen">×</button></div>
+        <div id="rot-d-inhalt"></div>
+      </dialog>
+      <p class="klein gg-hinweis">Kurse der SPDR-Sektor-ETFs und Branchen-ETFs von Yahoo, stündlich neu. Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-earnings-sheet" hidden>
+      <h1>Earnings Cheat Sheet</h1>
+      <p class="sekundaer">Alles Wichtige vor den nächsten Quartalszahlen deiner Aktien und der verbundenen Werte (nächste 75 Tage). Zeile anklicken für das ganze Blatt.</p>
+      <div id="es-inhalt"></div>
+    </div>
+
+    <div class="seite" id="seite-journal" hidden>
+      <h1>Journal</h1>
+      <div id="journal-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-exitanalyse" hidden>
+      <h1>Journal</h1>
+      <div id="exitanalyse-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-chancen" hidden>
+      <h1>Thesen</h1>
+      <div id="chancen-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-umbau" hidden>
+      <h1>Verteilung</h1>
+      <div id="umbau-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-regime" hidden>
+      <h1>Smart Money</h1>
+      <div id="regime-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-events" hidden>
+      <h1>Kalender</h1>
+      <div id="events-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-insider" hidden>
+      <h1>Smart Money</h1>
+      <div id="insider-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-drift" hidden>
+      <h1>Kalender</h1>
+      <div id="drift-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-paare" hidden>
+      <h1>Märkte</h1>
+      <div id="paare-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-makrotage" hidden>
+      <h1>Szenarien</h1>
+      <div id="makrotage-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-absicherung" hidden>
+      <h1>Risiko</h1>
+      <div id="absicherung-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-zertifikat" hidden>
+      <h1>Risiko</h1>
+      <div id="zertifikat-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-backtest" hidden>
+      <h1>Szenarien</h1>
+      <div id="backtest-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-montecarlo" hidden>
+      <h1>Szenarien</h1>
+      <div id="montecarlo-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-analysecharts" hidden>
+      <h1>Gewinn & Verlust</h1>
+      <div id="analysecharts-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-zinsen" hidden>
+      <h1>Märkte</h1>
+      <div id="zinsen-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-makrodaten" hidden>
+      <h1>Makro-Daten</h1>
+      <div id="makrodaten-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-status" hidden>
+      <h1>Status</h1>
+      <div id="st-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-einstellungen" hidden>
+      <h1>Einstellungen</h1>
+      <div id="ein-inhalt"><p class="sekundaer">Wird geladen …</p></div>
+    </div>
+
+    <div class="seite" id="seite-zahlen" hidden>
+      <h1>Zahlen-Auswertung</h1>
+      <section class="karte th-karte za-neu" aria-labelledby="za-neu-titel">
+        <div class="th-kopf">
+          <h2 id="za-neu-titel">Pressemitteilung auswerten</h2>
+          <p class="sekundaer">Auf der Investor-Relations-Seite der Firma die ganze Mitteilung zu den Quartalszahlen markieren (Strg+A), kopieren (Strg+C) und hier einfügen. Tabellen dürfen mit dabei sein. Der Text bleibt auf deinem Rechner.</p>
+        </div>
+        <form id="za-form" class="za-form">
+          <label class="feld za-text"><span>Text der Mitteilung</span><textarea id="za-text" rows="7" maxlength="400000" placeholder="NVIDIA Announces Financial Results for Third Quarter Fiscal 2027 …"></textarea></label>
+          <div class="za-zeile">
+            <label class="feld za-ticker"><span>Ticker</span><input id="za-ticker" type="text" maxlength="12" autocapitalize="characters" autocomplete="off" list="za-ticker-liste" placeholder="wird erkannt"></label>
+            <datalist id="za-ticker-liste"></datalist>
+            <button class="knopf primaer" id="za-los" type="submit">Auswerten</button>
+            <p class="sekundaer za-status" id="za-status" role="status"></p>
+          </div>
+        </form>
+      </section>
+      <div class="za-bereich">
+        <nav class="za-ordner" id="za-ordner" aria-label="Ordner"></nav>
+        <div class="za-inhalt">
+          <div id="za-liste"></div>
+          <div id="za-detail"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="seite" id="seite-earnings-moves" hidden>
+      <h1>Earnings-Moves</h1>
+      <div id="em-barometer"></div>
+      <p id="em-status" class="sekundaer" role="status">Wird geladen …</p>
+      <div class="r-kennzahlen" id="em-kennzahlen"></div>
+      <section class="karte th-karte" aria-labelledby="em-titel">
+        <div class="th-kopf"><h2 id="em-titel">Kursreaktion an den letzten Zahlen</h2><p class="sekundaer">Jeder Balken ist ein Quartalstermin, der neueste rechts. Fahr mit der Maus darüber für Datum, Reaktion und Überraschung beim Gewinn.</p></div>
+        <div class="em-liste" id="em-liste"></div>
+      </section>
+      <p class="hinweis">Reaktion = Veränderung des Schlusskurses: Kamen die Zahlen vor Börsenbeginn oder während des Handels, zählt derselbe Tag gegen den Vortag; kamen sie nach Börsenschluss, der nächste Handelstag. Ohne bekannte Uhrzeit nimmt Vinter ein Zwei-Tage-Fenster. In der Handelswährung, ohne Wechselkurs. „Ø Ausschlag“ ist die durchschnittliche Bewegung egal in welche Richtung. Erwartung des Optionsmarkts (nur US-Aktien, ab 14 Tagen vor dem Termin): Preis von Call und Put zum Kurs am nächsten Strike mit dem ersten Verfall nach dem Termin, geteilt durch den Kurs. Gibt es auch einen Verfall vor dem Termin, rechnet Vinter die normale Schwankung bis zum Verfall heraus. Das ist eine Spanne in beide Richtungen, keine Richtung. Termine und Gewinnerwartungen von Yahoo.</p>
+    </div>
+
+    <div class="seite" id="seite-prognosen" hidden>
+      <h1>Prognosen</h1>
+      <p id="pg-status" class="sekundaer" role="status">Wird geladen …</p>
+      <section class="karte th-karte" aria-labelledby="pg-fed-titel">
+        <div class="th-kopf"><h2 id="pg-fed-titel">Fed-Zinsentscheidungen</h2><p class="sekundaer" id="pg-fed-unter"></p></div>
+        <div class="pg-sitzungen" id="pg-fed"></div>
+        <p class="pg-vergleich">Vergleichen: <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener">CME FedWatch ↗</a> · <a href="https://www.google.com/search?q=Fed+decision+site%3Akalshi.com" target="_blank" rel="noopener">Kalshi ↗</a> · <a href="https://www.google.com/search?q=Fed+decision+site%3Apolymarket.com" target="_blank" rel="noopener">Polymarket ↗</a></p>
+        <h3 class="pg-unter">So haben sich die Wahrscheinlichkeiten entwickelt</h3>
+        <div id="pg-fed-verlauf"></div>
+        <h3 class="pg-unter">Erwartete Veränderung des Leitzinses in den nächsten zwölf Monaten</h3>
+        <div class="r-grafik" id="pg-kurve"></div>
+        <p class="sekundaer pg-depot" id="pg-depot"></p>
+      </section>
+      <div id="pg-fedtage"></div>
+      <div id="pg-ezb"></div>
+      <section class="karte th-karte" aria-labelledby="pg-eigene-titel">
+        <div class="th-kopf"><h2 id="pg-eigene-titel">Deine Prognosen</h2><p class="sekundaer">Veränderung in Prozentpunkten. Wenige Mitwetter sind gelb markiert: Die Zahl ist dann eher wackelig.</p></div>
+        <p class="sekundaer" id="pg-meldungen" role="status"></p>
+        <div class="pg-liste" id="pg-eigene"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="pg-entdecken-titel">
+        <div class="th-kopf"><h2 id="pg-entdecken-titel">Prognosen entdecken</h2><p class="sekundaer">Die meistgehandelten offenen Fragen je Thema. + verfolgt eine Frage, ein Klick auf den Text öffnet sie bei Manifold.</p></div>
+        <input class="pg-suche" id="pg-suche" type="search" placeholder="Eigene Suche, z. B. recession, Nvidia, election (Englisch findet am meisten)" aria-label="Prognosen suchen" autocomplete="off">
+        <div class="pg-bloecke" id="pg-bloecke"></div>
+      </section>
+      <p class="hinweis">Fed: selbst gerechnet aus Fed-Funds-Futures der CME (Kurse über Yahoo, verzögert) und dem Tagesgeldsatz der New York Fed, nach derselben Methode wie CME FedWatch. Diese Methode verteilt die Wahrscheinlichkeit je Sitzung auf zwei benachbarte Zinsschritte; ganz sichere Ausgänge erscheinen deshalb als „≈ 100 %“. Die Sitzungstermine kommen aus deinem Makro-Kalender (daten/markt/makro_termine.yaml). Alle anderen Prognosen stammen von Manifold Markets, einem Prognosemarkt mit Spielgeld: Die Zahlen sind Einschätzungen der Mitwettenden, keine Fakten. Je mehr Mitwetter, desto belastbarer. Echtgeld-Märkte wie Kalshi und Polymarket erlauben in ihren Bedingungen nicht, ihre Daten so abzurufen; deshalb gibt es dorthin nur Vergleichs-Links, die du selbst öffnest. Vinter merkt sich je verfolgter Prognose einen Wert pro Tag, daraus kommt die Veränderung. Themen änderst du in daten/markt/prognosen_themen.yaml.</p>
+    </div>
+
+    <div class="seite" id="seite-benchmark" hidden>
+      <h1>Benchmark</h1>
+      <p id="b-status" class="sekundaer" role="status">Wird geladen …</p>
+      <div class="b-wahl">
+        <div class="filter" id="b-zeitraum" role="group" aria-label="Zeitraum wählen">
+          <button type="button" data-zeit="1m">1 Monat</button>
+          <button type="button" data-zeit="3m">3 Monate</button>
+          <button type="button" data-zeit="ytd">Seit Jahresbeginn</button>
+          <button type="button" data-zeit="1j">1 Jahr</button>
+          <button type="button" data-zeit="start">Seit Start</button>
+        </div>
+        <label class="b-datum">von <input type="date" id="b-von"></label>
+        <label class="b-datum">bis <input type="date" id="b-bis"></label>
+      </div>
+      <p class="b-urteil" id="b-urteil"></p>
+      <section class="karte th-karte" aria-labelledby="b-linie-titel">
+        <div class="th-kopf"><h2 id="b-linie-titel">Wertentwicklung</h2><p class="sekundaer">Alle drei starten bei 0 %. Fahr mit der Maus über den Chart für die Werte an einem Tag.</p></div>
+        <div class="r-grafik" id="b-linie"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="b-vorsprung-titel">
+        <div class="th-kopf"><h2 id="b-vorsprung-titel">Vorsprung gegenüber dem MSCI World</h2><p class="sekundaer">Über der Linie liegst du vorn, darunter hinten (in Prozentpunkten).</p></div>
+        <div class="r-grafik" id="b-vorsprung"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="b-kennzahlen-titel">
+        <div class="th-kopf"><h2 id="b-kennzahlen-titel">Kennzahlen im Vergleich</h2><p class="sekundaer">Für den gewählten Zeitraum. Längster Balken je Kennzahl = bester Wert.</p></div>
+        <div id="b-kennzahlen"></div>
+      </section>
+      <div class="r-zwei">
+        <section class="karte th-karte" aria-labelledby="b-monate-titel">
+          <div class="th-kopf"><h2 id="b-monate-titel">Monat für Monat</h2><p class="sekundaer" id="b-monate-unter"></p></div>
+          <div id="b-monate"></div>
+        </section>
+        <section class="karte th-karte" aria-labelledby="b-dd-titel">
+          <div class="th-kopf"><h2 id="b-dd-titel">Rückschläge im Vergleich</h2><p class="sekundaer">Abstand zum jeweils letzten Hoch.</p></div>
+          <div class="r-grafik" id="b-dd"></div>
+        </section>
+      </div>
+      <p class="hinweis">Dein Depot als zeitgewichtete Rendite: Einzahlungen und Käufe verschieben die Linie nicht, sie zeigt nur, wie gut deine Auswahl war. Vergleich mit dem iShares Core MSCI World (EUNL) und dem iShares Core S&amp;P 500 (SXR8), beide in Euro gehandelt, also mit gleichem Wechselkurseffekt. Sharpe Ratio hier vereinfacht ohne risikofreien Zins: Rendite pro Jahr geteilt durch Schwankung pro Jahr. Bei Zeiträumen unter einem Jahr ist die Rendite pro Jahr hochgerechnet und entsprechend unsicher. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-etf" hidden>
+      <h1>ETF-Check</h1>
+      <p id="ec-status" class="sekundaer" role="status">Wird geladen …</p>
+      <section class="karte th-karte" aria-labelledby="ek-inhalt-titel">
+        <div class="th-kopf"><h2 id="ek-inhalt-titel">Was in deinen ETFs steckt</h2><p class="sekundaer">Jeder Balken ist ein ETF, aufgeteilt nach Ländern. Sehen sich zwei Balken ähnlich, kaufst du zweimal fast dasselbe. Unten zum Vergleich deine Mischung und der Weltmarkt.</p></div>
+        <div id="ek-inhalt"></div>
+        <p class="ek-legende" id="ek-legende"></p>
+      </section>
+      <section class="karte th-karte" aria-labelledby="ek-paare-titel">
+        <div class="th-kopf"><h2 id="ek-paare-titel">Wo sich deine ETFs doppeln, und wodurch</h2><p class="sekundaer">Je Paar: Kräftige Flächen haben beide ETFs gemeinsam, blasse hat nur einer. Darunter die Länder und die großen Firmen, die doppelt drin sind.</p></div>
+        <div class="ek-paare" id="ek-paare"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="ek-ersatz-titel">
+        <div class="th-kopf rs-kopf"><h2 id="ek-ersatz-titel">So ginge es einfacher</h2>
+          <div class="filter" id="ek-ersatz-wahl" role="group" aria-label="Was nachgebaut werden soll"><button type="button" data-ziel="mix">Deine Mischung</button><button type="button" data-ziel="welt">Weltmarkt</button></div></div>
+        <div id="ek-ersatz"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="ef-titel">
+        <div class="th-kopf"><h2 id="ef-titel">ETF-Finder: Was willst du erreichen?</h2><p class="sekundaer">Ziele antippen (mehrere gehen), Betrag eintragen. Vinter rechnet für jeden von über 40 ETFs aus, wie sich dein ETF-Teil dadurch verändern würde, und sortiert danach.</p></div>
+        <div class="ef-ziele" id="ef-ziele" role="group" aria-label="Ziele"></div>
+        <div class="ef-filter">
+          <div><span class="ef-label">Anlageklassen</span><div class="ef-ziele" id="ef-klassen" role="group" aria-label="Anlageklassen"></div></div>
+          <div class="pz-felder">
+            <label class="feld"><span>Betrag zum Dazukaufen in €</span><input id="ef-betrag" inputmode="decimal"></label>
+            <label class="feld"><span>Höchstens TER in %</span><input id="ef-maxter" inputmode="decimal" placeholder="egal"></label>
+            <label class="feld"><span>Erträge</span><select id="ef-ertrag" class="pv-select"><option value="egal">egal</option><option value="aus">ausschütten</option><option value="thes">wieder anlegen</option></select></label>
+          </div>
+          <label class="pz-haken"><input type="checkbox" id="ef-schmal"> Einzelne Länder und Branchen zulassen (streuen weniger)</label>
+        </div>
+        <div id="ef-ergebnis"></div>
+      </section>
+      <p class="hinweis">Nur der ETF-Teil deines Depots, Einzelaktien bleiben außen vor. Länderanteile der ETFs stehen ungefähr nach den Factsheets in daten/markt/etf_liste.yaml (dort lassen sich ETFs ergänzen und Werte korrigieren); Top-10-Firmen, Branchen, Ausschüttung und Kosten (TER) kommen täglich von Yahoo. Geschätzte Überschneidung = Summe der gemeinsamen Länderanteile, mal einem Faktor für die Art des ETFs (große und kleine Firmen haben nichts gemeinsam, Stil- und Branchen-ETFs nur einen Teil). Gemessen = wie viel Prozent der Wochenschwankung des einen ETFs der andere erklärt (R², letzte 3 Jahre, in Euro). Der FTSE Global All Cap ist erst seit August 2026 an der Börse; seine Kursdaten kommen deshalb vom US-Fonds VT, der denselben Index abbildet. Der ETF-Finder bewertet jeden ETF je Ziel von 0 (schlechtester) bis 100 (bester) und bildet den Durchschnitt; Einzelländer und Branchen-ETFs bekommen 15 % Abschlag, weil sie weniger streuen; die Schwankung stammt aus den Wochenkursen der letzten 3 Jahre. Information zum Selberdenken, keine Anlageberatung: Umschichten kann Steuern und Gebühren auslösen, und die Vergangenheit sagt nichts Sicheres über die Zukunft.</p>
+    </div>
+
+    <div class="seite" id="seite-dcf" hidden>
+      <h1>Reverse-DCF</h1>
+      <p id="dc-status" class="sekundaer" role="status">Wird geladen …</p>
+      <section class="karte pz-eingabe" aria-label="Annahmen für alle Aktien">
+        <div class="pz-felder">
+          <label class="feld"><span>Renditeerwartung (Diskontsatz) in %</span><input id="dc-r" inputmode="decimal"></label>
+          <label class="feld"><span>Endwachstum danach in %</span><input id="dc-gt" inputmode="decimal"></label>
+          <label class="feld"><span>Jahre mit starkem Wachstum</span><input id="dc-n" inputmode="numeric"></label>
+        </div>
+        <div class="filter dc-basis" id="dc-basis" role="group" aria-label="Free Cashflow als Ausgangspunkt">
+          <button type="button" data-basis="ttm">Letzte 12 Monate</button>
+          <button type="button" data-basis="jahr">Letztes Geschäftsjahr</button>
+          <button type="button" data-basis="schnitt3">Ø 3 Geschäftsjahre</button>
+        </div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="dc-titel">
+        <div class="th-kopf"><h2 id="dc-titel">Wie viel Wachstum der Kurs schon einpreist</h2>
+          <p class="sekundaer">Jährliches Free-Cashflow-Wachstum, das jede Aktie liefern muss, damit ihr heutiger Preis aufgeht. Je weiter rechts, desto mehr Zukunft ist schon bezahlt. Dahinter: wie schnell der Free Cashflow bisher gewachsen ist. Antippen für Details.</p></div>
+        <div class="r-grafik" id="dc-balken"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="dc-detail-titel">
+        <div class="th-kopf rs-kopf"><h2 id="dc-detail-titel">Im Detail</h2><select id="dc-wahl" class="pv-select" aria-label="Aktie wählen"></select></div>
+        <div id="dc-ergebnis"></div>
+        <div class="r-grafik" id="dc-chart"></div>
+        <p class="lc-legende"><span class="dc-l-hist"><i></i>Free Cashflow bisher</span><span class="dc-l-weg"><i></i>eingepreister Weg</span></p>
+        <h3 class="pg-unter">Zahlen der Firma <small class="sekundaer" id="dc-einheit"></small></h3>
+        <div class="pz-felder">
+          <label class="feld"><span>Free Cashflow</span><input id="dc-fcf" inputmode="decimal"></label>
+          <label class="feld"><span>Börsenwert</span><input id="dc-boersenwert" inputmode="decimal"></label>
+          <label class="feld"><span>Schulden</span><input id="dc-schulden" inputmode="decimal"></label>
+          <label class="feld"><span>Cash</span><input id="dc-cash" inputmode="decimal"></label>
+        </div>
+        <p class="klein sekundaer" id="dc-fcf-hinweis"></p>
+        <button type="button" class="knopf" id="dc-zurueck">Eigene Zahlen zurücksetzen</button>
+        <h3 class="pg-unter">Eingepreistes Wachstum bei anderen Annahmen</h3>
+        <div class="dc-tabelle" id="dc-tabelle"></div>
+      </section>
+      <p class="hinweis">Ein normaler DCF (Discounted Cashflow) rechnet aus angenommenem Wachstum einen fairen Preis aus. Der Reverse-DCF dreht das um: Er nimmt den heutigen Unternehmenswert (Börsenwert + Schulden − Cash) und sucht das jährliche Wachstum des Free Cashflows, bei dem die abgezinsten künftigen Cashflows genau diesen Wert ergeben. Die ersten Jahre wächst der Free Cashflow mit diesem Satz, danach für immer mit dem Endwachstum (Endwert nach Gordon: Cashflow × (1 + Endwachstum) ÷ (Renditeerwartung − Endwachstum)). Die Renditeerwartung ist, was du als Anleger pro Jahr verlangst; höher heißt, die Zukunft zählt weniger und es muss mehr Wachstum her. Free Cashflow = operativer Cashflow minus Investitionen, aus den Geschäftsberichten über Yahoo. Bei zyklischen Firmen (z. B. Speicherchips) schwankt er stark: Dann ist der Schnitt über 3 Jahre oft ehrlicher. Alle Felder lassen sich überschreiben, die Änderungen gelten nur bis zum Neuladen. Ein Denkwerkzeug, kein fairer Wert und keine Empfehlung.</p>
+    </div>
+
+    <div class="seite" id="seite-positionsgroesse" hidden>
+      <h1>Positionsgröße</h1>
+      <p id="pz-status" class="sekundaer" role="status">Wird geladen …</p>
+      <section class="karte pz-eingabe" aria-label="Eingaben">
+        <div class="pz-wahl">
+          <label class="feld"><span>Wert aus deinem Depot</span><select id="pz-wert" class="pv-select"></select></label>
+          <form id="pz-anderer" class="feld"><span>oder anderer Wert (Yahoo-Ticker, z. B. AMD, SAP.DE)</span>
+            <div class="pz-ticker"><input id="pz-ticker" autocomplete="off" spellcheck="false" placeholder="Ticker"><button class="knopf" type="submit">Laden</button></div></form>
+        </div>
+        <div class="pz-felder">
+          <label class="feld"><span>Einstieg in €</span><input id="pz-einstieg" inputmode="decimal"></label>
+          <label class="feld"><span>Stop in €</span><input id="pz-stop" inputmode="decimal"></label>
+          <label class="feld"><span>Ziel in € (optional)</span><input id="pz-ziel" inputmode="decimal"></label>
+          <label class="feld"><span>Höchstens verlieren in €</span><input id="pz-maxverlust" inputmode="decimal"></label>
+        </div>
+        <div class="pz-stops" id="pz-stops"></div>
+        <label class="pz-haken"><input type="checkbox" id="pz-gebuehr" checked> 1 € Gebühr je Kauf und Verkauf einrechnen</label>
+      </section>
+      <div id="pz-ergebnis"></div>
+      <p class="hinweis">Stückzahl = (höchster Verlust − Gebühren) ÷ (Einstieg − Stop), abgerundet. So verlierst du beim Stop nie mehr als geplant. Ausnahme: Öffnet die Aktie mit einer Kurslücke unter dem Stop, wird zum schlechteren Kurs verkauft. Stop-Vorschläge kommen aus der ATR, der durchschnittlichen Tagesschwankung der letzten 14 Tage: Ein Stop näher als etwa 2 ATR wird oft schon vom normalen Rauschen ausgelöst. Der Risikobeitrag zeigt, welchen Anteil an der gesamten Schwankung deines Depots die Position hätte, gerechnet aus den Tagesrenditen des letzten Jahres in Euro, so als hätte das neue Depot das ganze Jahr bestanden. Ein Rechenwerkzeug, keine Kaufempfehlung; Vinter kauft und verkauft nie etwas.</p>
+    </div>
+
+    <div class="seite" id="seite-relativ" hidden>
+      <h1>Relative Stärke</h1>
+      <p id="rs-status" class="sekundaer" role="status">Wird geladen …</p>
+      <div class="filter" id="rs-zeit" role="group" aria-label="Zeitraum">
+        <button type="button" data-zeit="tag">Heute</button>
+        <button type="button" data-zeit="woche">Woche</button>
+        <button type="button" data-zeit="monat">Monat</button>
+        <button type="button" data-zeit="3m">3 Monate</button>
+        <button type="button" data-zeit="jahr">Jahr</button>
+      </div>
+      <section class="karte th-karte" aria-labelledby="rs-titel">
+        <div class="th-kopf"><h2 id="rs-titel">Stärker oder schwächer als die eigene Branche</h2>
+          <p class="sekundaer" id="rs-unter"></p></div>
+        <div class="r-grafik" id="rs-balken"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="rs-chart-titel">
+        <div class="th-kopf rs-kopf"><h2 id="rs-chart-titel">Verlauf gegen die Branche</h2>
+          <select id="rs-wahl" class="pv-select" aria-label="Aktie wählen"></select></div>
+        <p class="sekundaer" id="rs-chart-unter"></p>
+        <div class="r-grafik" id="rs-linie"></div>
+        <h3 class="pg-unter">Vorsprung vor der Branche</h3>
+        <div class="r-grafik" id="rs-vorsprung"></div>
+      </section>
+      <p class="hinweis">Jede Aktie wird mit einem ETF ihrer Branche verglichen, beide in Euro, so wie es in deinem Depot ankommt. Welcher ETF, steht in daten/markt/vergleich_etf.yaml (z. B. Micron gegen den Halbleiter-ETF SOXX); fehlt eine Aktie dort, nimmt Vinter den US-Sektor-ETF zu der Branche, die Yahoo meldet. Relative Stärke = (1 + Rendite der Aktie) ÷ (1 + Rendite des ETFs) − 1, also: um wie viel Prozent du mit der Aktie besser gefahren wärst als mit der ganzen Branche. Ein Plus heißt, die Bewegung kommt von der Firma selbst und nicht nur vom Rückenwind der Branche; ein Minus, dass die Branche läuft, deine Aktie aber hinterherhinkt. Bei europäischen Aktien gegen US-Branchen-ETFs spielt der Wechselkurs mit. „Heute“ vergleicht den letzten Kurs mit dem Schluss davor; US-ETFs handeln erst ab 15:30 Uhr. Information, kein Kauf- oder Verkaufssignal.</p>
+    </div>
+
+    <div class="seite" id="seite-faktoren" hidden>
+      <h1>Faktoren</h1>
+      <p id="fk-status" class="sekundaer" role="status">Wird berechnet …</p>
+      <div class="filter" id="fk-jahre" role="group" aria-label="Zeitraum der Rechnung">
+        <button type="button" data-jahre="3">3 Jahre</button>
+        <button type="button" data-jahre="5">5 Jahre</button>
+      </div>
+      <p class="fk-satz" id="fk-satz"></p>
+      <div class="r-kennzahlen" id="fk-kennzahlen"></div>
+      <section class="karte th-karte" aria-labelledby="fk-wetten-titel">
+        <div class="th-kopf"><h2 id="fk-wetten-titel">Deine versteckten Wetten</h2>
+          <p class="sekundaer">So bewegt sich dein Depot zusätzlich, wenn ein Anlagestil den US-Markt um 10 % schlägt. Rechts: Du hängst an diesem Stil. Links: Dein Depot verhält sich wie das Gegenteil. Die feine Linie zeigt den wahrscheinlichen Bereich, blass = statistisch unsicher.</p></div>
+        <div class="r-grafik" id="fk-wetten"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="fk-zerlegung-titel">
+        <div class="th-kopf"><h2 id="fk-zerlegung-titel">Woher deine Rendite der letzten 12 Monate kam</h2>
+          <p class="sekundaer" id="fk-zerlegung-unter"></p></div>
+        <div class="r-grafik" id="fk-zerlegung"></div>
+      </section>
+      <section class="karte th-karte" aria-labelledby="fk-matrix-titel">
+        <div class="th-kopf"><h2 id="fk-matrix-titel">Welche Position welchen Stil mitbringt</h2>
+          <p class="sekundaer">Je kräftiger die Farbe, desto stärker hängt die Position am Stil. Grün = mit dem Stil, rot = gegen ihn; beim Markt zählt die Abweichung von 1. Blasse Felder sind statistisch unsicher. Fahr über ein Feld für die Zahl.</p></div>
+        <div class="fk-matrix" id="fk-matrix"></div>
+      </section>
+      <p class="hinweis">Vier Anlagestile („Faktoren“) erklären neben dem Gesamtmarkt einen großen Teil aller Aktienbewegungen: kleine Firmen (iShares Russell 2000, IWM), Momentum, also die Gewinner der letzten Monate (MTUM), günstig bewertete Firmen (VLUE) und solide, profitable Firmen (QUAL). Als Faktor zählt jeweils der Vorsprung dieses ETFs vor dem S&amp;P 500 (SPY) in einer Woche, sonst würden alle vier nur den Markt messen. Vinter rechnet aus den Wochenkursen in Euro eine Regression: Depot bzw. Position gegen den Weltmarkt (MSCI World) und die vier Vorsprünge gleichzeitig. Markt-Beta 1,2 heißt: Steigt der Weltmarkt um 10 %, steigt das Depot im Schnitt um 12 %. Die Zerlegung multipliziert jede dieser Empfindlichkeiten mit der tatsächlichen Bewegung des Faktors in den letzten 52 Wochen; „Rest“ ist alles, was die Stile nicht erklären: deine Aktienauswahl, Firmennachrichten, Glück. Gerechnet mit deinem heutigen Depot, als hättest du es die ganze Zeit gehalten. Die Faktor-ETFs sind US-Fonds: Für europäische Aktien ist die Zuordnung nur eine Annäherung. Blasse Balken: t-Wert unter 2, der Zusammenhang könnte Zufall sein. Vergangenheit, keine Vorhersage und kein Signal.</p>
+    </div>
+
+    <div class="seite" id="seite-vola" hidden>
+      <h1>Volatilität</h1>
+      <p class="v-fazit" id="v-fazit" aria-live="polite"></p>
+      <section class="karte v-fuermich" id="v-fuermich" aria-labelledby="v-fm-titel" hidden></section>
+      <p id="v-status" class="sekundaer" role="status">Wird geladen …</p>
+      <section class="karte th-karte v-karte" aria-labelledby="v-titel">
+        <div class="th-kopf v-kopf">
+          <h2 id="v-titel">Volatilitätsoberfläche <button type="button" class="v-info-knopf" id="v-info-knopf" aria-expanded="false" aria-controls="v-info" aria-label="Erklärung: Was zeigt die Fläche?">i</button><button type="button" class="knopf v-muster-knopf" id="v-muster-knopf" aria-haspopup="dialog" aria-controls="v-muster">Muster</button></h2>
+          <p class="sekundaer" id="v-stand"></p>
+        </div>
+        <div class="v-info" id="v-info" hidden>
+          <p><b>Was die Fläche zeigt.</b> Jeder Punkt ist eine implizite Volatilität (IV): wie stark der Optionsmarkt den Kurs bis zum Verfall schwanken sieht, aufs Jahr gerechnet. Quer liegt der Strike in Prozent vom heutigen Kurs (links darunter, rechts darüber), in die Tiefe die Restlaufzeit, nach oben die IV.</p>
+          <p><b>Skew lesen.</b> Steigt die Fläche nach links an, kostet Schutz gegen fallende Kurse mehr als eine Wette auf steigende. Bei Aktienindizes ist das normal. Je steiler die linke Seite, desto mehr Angst vor einem Rutsch.</p>
+          <p><b>Laufzeit lesen.</b> Normal steigt die IV mit der Laufzeit leicht an. Liegt die vordere Kante (kurze Laufzeiten) höher als die hintere, erwartet der Markt die Unruhe jetzt: ein Stresszeichen.</p>
+          <p><b>Beulen.</b> Eine Erhebung nur bei bestimmten Laufzeiten deutet auf ein Ereignis in diesem Zeitraum, zum Beispiel Inflationsdaten, eine Fed-Sitzung oder Quartalszahlen großer Werte. Die gestrichelten Linien markieren die Makro-Termine aus deinem Kalender.</p>
+          <p><b>Veränderung.</b> Rot heißt: die IV ist gestiegen, Optionen sind teurer geworden. Blau heißt: gefallen.</p>
+          <p><b>Woher die Zahlen kommen.</b> Optionsketten von Yahoo. Während des US-Handels alle 30 Minuten eine Live-Fläche (etwa 15 Minuten verzögert), gespeichert wird je Handelstag die Fläche rund 30 Minuten nach Börsenschluss, solange der Server läuft. Jeder US-Wert mit Optionen lässt sich öffnen; er wird dann 30 Tage lang jeden Abend mitgespeichert. Die IV rechnet das Tool selbst aus dem Mittel von Geld- und Briefkurs. Illiquide Optionen und Ausreißer fliegen raus, je Verfall wird eine glatte Kurve gelegt. Blasse Bereiche: Dort gibt es keine gehandelten Strikes, die Werte sind vom Rand fortgeschrieben. Reine Information, keine Anlageberatung.</p>
+        </div>
+        <div class="v-wahl">
+          <div class="v-basis"><div class="filter" id="v-ticker" role="group" aria-label="Basiswert"></div>
+            <form class="v-suche" id="v-suche"><input id="v-suche-feld" class="pv-select" placeholder="US-Ticker, z. B. NVDA" autocomplete="off" aria-label="Anderen US-Wert öffnen"><button type="submit" class="knopf ca-mini">Öffnen</button></form></div>
+          <div class="filter" id="v-ansicht" role="group" aria-label="Ansicht">
+            <button type="button" data-ansicht="heute">Heute</button>
+            <button type="button" data-ansicht="gestern">Seit gestern</button>
+            <button type="button" data-ansicht="woche">Seit 1 Woche</button>
+            <button type="button" data-ansicht="monat">Seit 1 Monat</button>
+            <button type="button" data-ansicht="earnings" title="Gegen die Fläche vom Handelstag vor den letzten Quartalszahlen">Vor Earnings</button>
+          </div>
+          <select id="v-frei" class="pv-select v-frei" aria-label="Vergleich mit einem gespeicherten Stand"></select>
+          <button type="button" class="knopf v-abspielen" id="v-abspielen" aria-pressed="false">▶ Abspielen</button>
+          <div class="filter" id="v-form" role="group" aria-label="Darstellung">
+            <button type="button" data-form="3d">3D</button>
+            <button type="button" data-form="karte">Heatmap</button>
+          </div>
+          <div class="filter" id="v-ausschnitt" role="group" aria-label="Strike-Bereich der 3D-Fläche">
+            <button type="button" data-ausschnitt="eng">90–110 %</button>
+            <button type="button" data-ausschnitt="weit">80–120 %</button>
+          </div>
+          <div class="v-farbwahl" id="v-farbwahl">
+            <div class="v-farbwahl-zeile">
+              <span class="v-farbwahl-titel" id="v-farbe-titel">Farbe nach</span>
+              <div class="filter" id="v-farbe" role="group" aria-labelledby="v-farbe-titel">
+                <button type="button" data-farbe="handel">Handel</button>
+                <button type="button" data-farbe="iv">IV</button>
+              </div>
+            </div>
+            <!-- Zweite Zeile nur bei "Handel": fährt darunter aus, statt die Zeile darüber zu verschieben. -->
+            <div class="v-ausklapp" id="v-handel-klapp">
+              <div>
+                <div class="v-farbwahl-zeile">
+                  <span class="v-farbwahl-titel">Handel als</span>
+                  <div class="filter" id="v-handel" role="group" aria-label="Art des Handels">
+                    <button type="button" data-handel="oi">Open Interest</button>
+                    <button type="button" data-handel="volumen">Volumen</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="v-flaeche" id="v-flaeche">
+          <canvas id="v-canvas" tabindex="0" role="img" aria-label="Volatilitätsoberfläche"></canvas>
+          <div class="v-karte" id="v-karte"></div>
+          <p class="v-leer sekundaer" id="v-leer" hidden></p>
+          <div class="c-tip v-tip" id="v-tip" hidden></div>
+        </div>
+        <div class="v-legende" id="v-legende"></div>
+        <p class="zoom-leiste" id="v-hilfe"></p>
+      </section>
+      <div class="v-schnitte" id="v-schnitte" hidden>
+        <section class="karte th-karte v-schnitt" aria-labelledby="v-smile-titel">
+          <div class="th-kopf"><h2 id="v-smile-titel">Smile</h2><p class="sekundaer">IV über den Strike bei einer Laufzeit. Links Absicherung nach unten (Puts), rechts Wetten nach oben (Calls). Laufzeit wählen oder in die Fläche klicken.</p></div>
+          <div class="filter v-smile-tage" id="v-smile-tage" role="group" aria-label="Laufzeit des Smiles"></div>
+          <div class="v-kurve" id="v-smile"></div>
+        </section>
+        <section class="karte th-karte v-schnitt" aria-labelledby="v-struktur-titel">
+          <div class="th-kopf"><h2 id="v-struktur-titel">Laufzeitstruktur</h2><p class="sekundaer">IV über die Restlaufzeit, am Geld und 10 % darunter. Steigt die Linie nach rechts, ist alles normal. Senkrechte Linien: Makro-Termine.</p></div>
+          <div class="v-kurve" id="v-struktur"></div>
+        </section>
+      </div>
+      <div class="v-kennzahlen" id="v-kennzahlen"></div>
+      <div id="sw-wert"></div>
+      <div id="sw-depot"></div>
+      <div id="sw-vrp"></div>
+      <dialog class="v-sheet" id="v-muster" aria-labelledby="v-muster-titel">
+        <span class="v-sheet-griff" aria-hidden="true"></span>
+        <div class="v-sheet-kopf">
+          <h2 id="v-muster-titel">Muster lesen</h2>
+          <button type="button" class="knopf" id="v-muster-zu">Schließen</button>
+        </div>
+        <p class="sekundaer">Typische Formen von Smile, Laufzeitstruktur und Veränderung, schematisch gezeichnet. Was gerade bei SPY oder QQQ zutrifft, steht oben und ist mit „aktuell“ markiert. Erkannt wird das mit festen Regeln, keine Kauf- oder Verkaufsempfehlung.</p>
+        <div id="v-muster-inhalt"></div>
+      </dialog>
+    </div>
+
+    <div class="seite" id="seite-exits" hidden>
+      <h1>Exit-Alarme</h1>
+      <p id="x-status" class="sekundaer" role="status">Wird geladen …</p>
+      <label class="schwelle">Hervorheben, wenn ein Level näher als
+        <input id="x-schwelle" type="number" min="1" max="30" step="0.5" inputmode="decimal"> % ist
+      </label>
+      <section class="karte th-karte" aria-labelledby="x-ueber-titel">
+        <div class="th-kopf"><h2 id="x-ueber-titel">Deine Exit-Pläne</h2><p class="sekundaer">Eine Zeile pro Aktie: Die Spur reicht vom tiefsten bis zum höchsten Level, der Punkt ist der Kurs heute. Rechts das nächste Level. Antippen zeigt darunter Chart und Details.</p></div>
+        <div id="x-uebersicht"></div>
+      </section>
+      <div class="th-wahl" id="x-wahl" hidden>
+        <button type="button" class="knopf th-pfeil" id="x-zurueck" aria-label="Vorige Aktie">‹</button>
+        <select id="x-auswahl" aria-label="Aktie wählen"></select>
+        <button type="button" class="knopf th-pfeil" id="x-weiter" aria-label="Nächste Aktie">›</button>
+      </div>
+      <div id="x-werte"></div>
+      <section class="karte th-karte" aria-labelledby="x-ohne-titel">
+        <div class="th-kopf"><h2 id="x-ohne-titel">Ohne Exit-Plan</h2><p class="sekundaer" id="x-ohne-unter"></p></div>
+        <div id="x-ohne"></div>
+      </section>
+      <p class="hinweis">Exit-Level trägst du in den Thesen ein (Teilverkauf, Komplett, Nachkauf, Stop). Fortschritt heißt: wie weit der Kurs vom Einstandskurs aus schon in Richtung des Levels gelaufen ist. ATR ist die durchschnittliche Tagesschwankung der letzten 14 Tage; der Trailing-Stop-Vorschlag ist der höchste Kurs der letzten 22 Handelstage minus drei ATR (Chandelier-Methode). Ist der Kurs schon darunter gefallen, wäre dieser Stop bereits ausgelöst; dann schlägt Vinter einen neuen Stop drei ATR unter dem heutigen Kurs vor („neu ab heute"). Ein Stop-Vorschlag liegt so immer unter dem aktuellen Kurs. Er wird täglich neu gerechnet; einen echten Trailing Stop ziehst du nur nach oben nach. Nur eine Orientierung. Kursverlauf mit dem heutigen Wechselkurs in Euro umgerechnet. Reine Information, keine Anlageberatung.</p>
+    </div>
+
+    <div class="seite" id="seite-news" hidden>
+      <h1>News</h1>
+      <div class="filter n-ansicht" id="n-ansicht" role="group" aria-label="Ansicht wählen">
+        <button type="button" data-ansicht="ticker">Ticker</button>
+        <button type="button" data-ansicht="reden">Reden &amp; Zitate</button>
+      </div>
+      <div id="n-teil-reden" hidden>
+        <p id="r-status" class="sekundaer" role="status">Wird geladen …</p>
+        <div class="filter" id="r-kategorien" role="group" aria-label="Nach Sprechern filtern"></div>
+        <div class="r-auftritte" id="r-auftritte"></div>
+        <p class="hinweis">Vinter erkennt in den Eilmeldungen von FinancialJuice Aussagen im Format „Sprecher: Aussage“ und bündelt die Zitate einer Person mit weniger als einer Stunde Abstand zu einem Auftritt (Rede, Interview, Pressekonferenz). LIVE heißt: letzte Aussage vor höchstens 20 Minuten. Die Kernaussagen sind echte Zitate, die das lokale Sprachmodell als am repräsentativsten auswählt; es formuliert nichts neu. Die Tendenz bei Notenbankern ist eine grobe Zählung von Signalwörtern (z. B. „hike“ gegen „cut“), keine Einordnung durch Fachleute. Den offiziellen Wortlaut verlinkt Vinter, sobald Fed oder EZB die Rede veröffentlichen. Zitate sind auf Englisch, wie sie gemeldet werden.</p>
+      </div>
+      <div id="n-teil-ticker">
+      <p id="n-status" class="sekundaer" role="status">News werden geladen …</p>
+      <div class="filter n-tags" id="n-tags" role="group" aria-label="News nach Thema filtern"></div>
+      <div id="n-quellen" class="n-quellen" hidden></div>
+      <section class="karte n-feed" id="n-liste" aria-label="Meldungen" aria-live="polite" hidden></section>
+      <p class="hinweis">Laufender Nachrichtenticker aus FinancialJuice, Pressemitteilungen von Fed und EZB, Veröffentlichungen der US-Arbeitsmarktbehörde BLS sowie Finnhub-News und SEC-Pflichtmeldungen (8-K) zu deinen US-Werten. Neueste oben, alle ein bis zwei Minuten kommen neue Meldungen dazu. Fällt eine Quelle aus, bleiben ihre letzten Meldungen stehen. Grün markiert: Meldungen zu deinen Positionen, gold markiert: passt zu einem News-Thema deiner Thesen. Tags und „Wichtig“-Wörter vergibt Vinter nach festen Regeln; Quellen und Wörter änderst du in daten/markt/news_quellen.yaml. Gleiche Meldungen aus mehreren Quellen stehen nur einmal da. News passend zu deinen Thesen mit Einordnung findest du unter Thesen.</p>
+      </div>
+    </div>
+
+    <div class="seite" id="seite-kalender" hidden>
+      <h1>Kalender</h1>
+      <p id="kal-status" class="sekundaer" role="status">Termine werden geladen …</p>
+      <div class="filter" id="kal-filter" role="group" aria-label="Termine filtern">
+        <button type="button" data-filter="alle">Alle</button>
+        <button type="button" data-filter="earnings">Earnings</button>
+        <button type="button" data-filter="makro">Makro</button>
+        <button type="button" data-filter="markt" title="Alle großen Firmen ab 20 Mrd. $ Börsenwert, nicht nur deine">Ganzer Markt</button>
+      </div>
+      <div id="kal-meldungen"></div>
+      <div id="kal-wochen"></div>
+      <p class="hinweis" id="kal-hinweis" hidden>Eigene Werte sind blau, Makro-Termine gelb markiert. Ein Klick auf einen Termin zeigt die gemeldeten Zahlen oder die Erwartungen. Uhrzeiten in deutscher Zeit, Earnings-Erwartungen laut Yahoo, gemeldete Zahlen von US-Werten laut Finnhub. Termine können sich noch ändern. Makro-Werte trägst du in daten/markt/makro_termine.yaml ein.</p>
+    </div>
+  </main>
+
+  <div class="schwebe" id="schwebe" role="tooltip" hidden></div>
+  <script src="lib/karte/d3.min.js"></script>
+  <script src="lib/karte/topojson-client.min.js"></script>
+  <script src="lib/lightweight-charts/lightweight-charts.standalone.production.js"></script>
+  <script src="app.js?v=275"></script>
+</body>
+</html>
