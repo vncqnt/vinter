@@ -11437,6 +11437,115 @@ async function mtLaden() {
 }
 
 
+// ---- Quant-Fächer: gemeinsamer Baustein für Simulationen und Verläufe um ein Ereignis ----
+// Viele blasse Beispielpfade (andere mögliche Verläufe), abgestufte Wahrscheinlichkeitsbänder, kräftige Linien
+// und rechts am Rand die Verteilung der Werte als seitliche Dichtekurve. Farben kommen über die Klassen
+// es-v0 … es-v3 (Mint, Gold, Blau, Violett) und es-zufall (Grau), die --es setzen.
+// opts: x (Liste der Schritte), xText(v, i), format(v), hoehe,
+//       pfade: [{werte, klasse}] blass (z. B. Zufall), spuren: [{werte, klasse, id, titel}] anklickbar,
+//       baender: [{lo, hi, klasse, staerke: 1|2}], linien: [{werte, klasse, name, breit, gestrichelt}],
+//       refY: [{wert, text}], refX: [{i, text, art}], rand: {titel, reihen: [{werte, klasse, name}]},
+//       enden: true = Endwerte der Linien rechts beschriften, beiKlick(id)
+function qfKde(werte, gitter) {
+  const w = werte.filter((v) => v !== null && Number.isFinite(v));
+  if (w.length < 8) return null;
+  const mittel = w.reduce((a, b) => a + b, 0) / w.length;
+  const sd = Math.sqrt(w.reduce((a, b) => a + (b - mittel) ** 2, 0) / (w.length - 1)) || 1e-9;
+  const s = [...w].sort((a, b) => a - b), iqr = s[Math.floor(s.length * 0.75)] - s[Math.floor(s.length * 0.25)];
+  const h = 0.9 * Math.min(sd, iqr / 1.34 || sd) * w.length ** -0.2 || sd; // Silverman
+  return gitter.map((g) => w.reduce((a, v) => a + Math.exp(-0.5 * ((g - v) / h) ** 2), 0) / (w.length * h * Math.sqrt(2 * Math.PI)));
+}
+
+function qfChart(feld, o) {
+  if (!feld) return;
+  const breite = feld.clientWidth || 640, hoehe = o.hoehe ?? 320;
+  const randBreite = o.rand ? Math.min(90, Math.max(56, breite * 0.12)) : 0;
+  const endeBreite = o.enden ? (o.endenBreite ?? 64) : 0;
+  const rand = { l: 56, r: 12 + randBreite + endeBreite, o: 14, u: 28 };
+  const n = o.x.length, innen = breite - rand.l - rand.r;
+  // Wertebereich: Linien und Bänder ganz, Pfade nur 2.–98. Perzentil (einzelne Ausreißer sollen die Achse nicht sprengen)
+  const kern = [], pf = [];
+  (o.linien ?? []).forEach((l) => l.werte.forEach((v) => v != null && kern.push(v)));
+  (o.baender ?? []).forEach((b) => { b.lo.forEach((v) => v != null && kern.push(v)); b.hi.forEach((v) => v != null && kern.push(v)); });
+  (o.refY ?? []).forEach((r) => kern.push(r.wert));
+  [...(o.pfade ?? []), ...(o.spuren ?? [])].forEach((p) => p.werte.forEach((v) => v != null && Number.isFinite(v) && pf.push(v)));
+  pf.sort((a, b) => a - b);
+  if (pf.length) kern.push(pf[Math.floor(pf.length * 0.02)], pf[Math.floor(pf.length * 0.98)]);
+  if (!kern.length) { feld.innerHTML = ''; return; }
+  const ticks = esTicks(Math.min(...kern), Math.max(...kern), 4);
+  const lo = ticks[0], hi = ticks.at(-1);
+  const x = (i) => rand.l + (n === 1 ? innen / 2 : (i / (n - 1)) * innen);
+  const y = (v) => rand.o + ((hi - v) / (hi - lo || 1)) * (hoehe - rand.o - rand.u);
+  const pfad = (werte) => { let d = '', offen = false; werte.forEach((v, i) => { if (v == null || !Number.isFinite(v)) { offen = false; return; } d += `${offen ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`; offen = true; }); return d; };
+  const band = (a, b) => { const ok = a.map((v, i) => [v, b[i], i]).filter(([u, w]) => u != null && w != null); if (!ok.length) return ''; return `M${ok.map(([, w, i]) => `${x(i).toFixed(1)} ${y(w).toFixed(1)}`).join('L')}L${ok.reverse().map(([u, , i]) => `${x(i).toFixed(1)} ${y(u).toFixed(1)}`).join('L')}Z`; };
+  // Zeitachse: bei ganzzahligen Schritten (Tage um ein Ereignis) runde Werte wie −10, 0, +10, sonst gleichmäßig
+  const jede = Math.max(1, Math.ceil(60 / (innen / Math.max(1, n - 1))));
+  const ganz = o.x.every((v) => Number.isInteger(v)) && o.x.some((v) => v < 0);
+  const rund = ganz ? [1, 2, 5, 10, 20, 50, 100, 200].find((s) => s >= jede) ?? jede : jede;
+  const xAchse = o.x.map((v, i) => i).filter((i) => (ganz ? o.x[i] % rund === 0 : i % jede === 0 || i === n - 1)).filter((i, k, a) => ganz || i !== n - 1 || (i - (a[k - 1] ?? -99)) * innen / Math.max(1, n - 1) > 40)
+    .map((i) => `<text class="c-achse" x="${x(i)}" y="${hoehe - 8}" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${esc(o.xText ? o.xText(o.x[i], i) : o.x[i])}</text>`).join('');
+  // Randverteilung: seitliche Dichte je Reihe, bei wenigen Werten nur Striche (Rug)
+  let randSvg = '';
+  if (o.rand) {
+    const x0 = breite - rand.r + endeBreite + 10, gitter = Array.from({ length: 80 }, (_, k) => lo + (k / 79) * (hi - lo));
+    const dichten = o.rand.reihen.map((r) => qfKde(r.werte, gitter));
+    const maxD = Math.max(1e-12, ...dichten.filter(Boolean).flat());
+    randSvg = `<line class="qf-rand-achse" x1="${x0}" x2="${x0}" y1="${rand.o}" y2="${hoehe - rand.u}"/>
+      <text class="c-achse" x="${x0}" y="${hoehe - 8}">${esc(o.rand.titel ?? '')}</text>
+      ${o.rand.reihen.map((r, k) => {
+        const d = dichten[k], w = r.werte.filter((v) => v != null && Number.isFinite(v));
+        if (!d) return w.map((v) => { const yy = y(Math.max(lo, Math.min(hi, v))); return `<line class="qf-rug ${r.klasse}${v < lo || v > hi ? ' aussen' : ''}" x1="${x0}" x2="${x0 + 12}" y1="${yy}" y2="${yy}"><title>${esc(o.format(v))}</title></line>`; }).join('');
+        const pts = gitter.map((g, j) => `${(x0 + (d[j] / maxD) * (randBreite - 14)).toFixed(1)} ${y(g).toFixed(1)}`);
+        const med = [...w].sort((a, b) => a - b)[Math.floor(w.length / 2)];
+        return `<path class="qf-dichte ${r.klasse}" d="M${x0} ${y(gitter[0])}L${pts.join('L')}L${x0} ${y(gitter.at(-1))}Z"/><line class="qf-dichte-mitte ${r.klasse}" x1="${x0}" x2="${x0 + randBreite - 14}" y1="${y(med)}" y2="${y(med)}"/>`;
+      }).join('')}`;
+  }
+  // Endwerte der Linien direkt rechts beschriften (ohne Überlappung: nach unten schieben)
+  let enden = '';
+  if (o.enden) {
+    const marken = (o.linien ?? []).map((l) => { let i = l.werte.length - 1; while (i >= 0 && l.werte[i] == null) i--; return i < 0 ? null : { y: y(l.werte[i]), text: l.endText ?? o.format(l.werte[i]), klasse: `${l.klasse}${l.breit ? ' haupt' : ''}`, name: l.kurz ?? '' }; }).filter(Boolean).sort((a, b) => a.y - b.y);
+    marken.forEach((m, k) => { if (k && m.y - marken[k - 1].y < 13) m.y = marken[k - 1].y + 13; });
+    enden = marken.map((m) => `<text class="qf-ende ${m.klasse}" x="${breite - rand.r + 6}" y="${m.y + 4}">${esc(m.name ? `${m.name} ` : '')}<tspan>${esc(m.text)}</tspan></text>`).join('');
+  }
+  const klick = !!o.beiKlick && (o.spuren ?? []).length;
+  feld.innerHTML = `<div class="es-chart-innen qf"><svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}" role="img" aria-label="${esc(o.titel ?? 'Diagramm')}">
+    <defs><clipPath id="qf-clip-${feld.id}"><rect x="${rand.l}" y="${rand.o - 2}" width="${innen}" height="${hoehe - rand.o - rand.u + 4}"/></clipPath></defs>
+    ${ticks.map((t) => `<line class="${t === 0 && !o.ohneNull ? 'lc-null' : 'lc-gitter'}" x1="${rand.l}" x2="${rand.l + innen}" y1="${y(t)}" y2="${y(t)}"/><text class="c-achse" x="${rand.l - 8}" y="${y(t) + 4}" text-anchor="end">${esc(o.format(t, true))}</text>`).join('')}
+    ${xAchse}
+    <g clip-path="url(#qf-clip-${feld.id})">
+      ${(o.pfade ?? []).map((p) => `<path class="qf-pfad ${p.klasse ?? 'es-zufall'}" d="${pfad(p.werte)}"/>`).join('')}
+      ${(o.baender ?? []).map((b) => `<path class="qf-band s${b.staerke ?? 1} ${b.klasse}" d="${band(b.lo, b.hi)}"/>`).join('')}
+      ${(o.spuren ?? []).map((p) => `<path class="qf-spur ${p.klasse}${p.gewaehlt ? ' gewaehlt' : ''}" d="${pfad(p.werte)}" data-qf-id="${esc(p.id)}"><title>${esc(p.titel ?? '')}</title></path>`).join('')}
+      ${(o.refY ?? []).map((r) => `<line class="qf-ref" x1="${rand.l}" x2="${rand.l + innen}" y1="${y(r.wert)}" y2="${y(r.wert)}"/>${r.text ? `<text class="c-achse" x="${rand.l + 4}" y="${y(r.wert) - 5}">${esc(r.text)}</text>` : ''}`).join('')}
+      ${(o.refX ?? []).map((r) => `<line class="qf-refx ${r.art ?? ''}" x1="${x(r.i)}" x2="${x(r.i)}" y1="${rand.o}" y2="${hoehe - rand.u}"/>${r.text ? `<text class="c-achse" x="${x(r.i) + 4}" y="${rand.o + 10}">${esc(r.text)}</text>` : ''}`).join('')}
+      ${(o.linien ?? []).map((l) => `<path class="qf-linie ${l.klasse}${l.breit ? ' breit' : ''}${l.gestrichelt ? ' gestrichelt' : ''}" d="${pfad(l.werte)}"/>`).join('')}
+    </g>
+    ${enden}${randSvg}
+    <line class="lc-zeiger" y1="${rand.o}" y2="${hoehe - rand.u}" visibility="hidden"/>
+    ${(o.linien ?? []).map((l, k) => `<circle class="qf-punkt ${l.klasse}" r="3.5" data-k="${k}" visibility="hidden"/>`).join('')}
+  </svg><div class="c-tip lc-tip" hidden></div></div>
+  ${o.legende !== false ? `<p class="lc-legende">${(o.legendeEintraege ?? (o.linien ?? []).filter((l) => l.name)).map((l) => `<span class="${l.klasse}"><i></i>${esc(l.name)}</span>`).join('')}${o.legendeZusatz ?? ''}</p>` : ''}`;
+  const svg = feld.querySelector('svg'), tip = feld.querySelector('.lc-tip'), zeiger = feld.querySelector('.lc-zeiger');
+  const punkte = [...feld.querySelectorAll('.qf-punkt')];
+  const zeigen = (cx) => {
+    const px = cx - svg.getBoundingClientRect().left;
+    if (px > rand.l + innen + 4) { weg(); return; }
+    const i = Math.max(0, Math.min(n - 1, Math.round(((px - rand.l) / innen) * (n - 1))));
+    zeiger.setAttribute('x1', x(i)); zeiger.setAttribute('x2', x(i)); zeiger.setAttribute('visibility', 'visible');
+    (o.linien ?? []).forEach((l, k) => { const v = l.werte[i]; if (v == null) punkte[k].setAttribute('visibility', 'hidden'); else { punkte[k].setAttribute('cx', x(i)); punkte[k].setAttribute('cy', y(v)); punkte[k].setAttribute('visibility', 'visible'); } });
+    tip.innerHTML = `<small>${esc(o.xText ? o.xText(o.x[i], i, true) : o.x[i])}</small>${(o.tipZeilen ? o.tipZeilen(i) : (o.linien ?? []).filter((l) => l.name).map((l) => [l.name, l.werte[i], l.klasse]))
+      .map(([name, v, k]) => `<div class="${k ?? ''}"><span><i></i>${esc(name)}</span><span>${v == null ? '–' : esc(typeof v === 'string' ? v : o.format(v))}</span></div>`).join('')}`;
+    tip.hidden = false;
+    const platz = tip.offsetWidth + 12;
+    tip.style.left = `${x(i) + platz < breite ? x(i) + 12 : Math.max(0, x(i) - platz)}px`;
+  };
+  const weg = () => { tip.hidden = true; zeiger.setAttribute('visibility', 'hidden'); punkte.forEach((p) => p.setAttribute('visibility', 'hidden')); };
+  svg.addEventListener('pointermove', (e) => zeigen(e.clientX));
+  svg.addEventListener('pointerdown', (e) => zeigen(e.clientX));
+  svg.addEventListener('pointerleave', weg);
+  if (klick) svg.querySelectorAll('.qf-spur').forEach((p) => p.addEventListener('click', () => o.beiKlick(p.dataset.qfId)));
+}
+
 // ---- Event Study: app/markt/eventstudie.py, app/nutzer/eventstudie.py ----
 // Ablauf: /api/eventstudie lädt Events, Kategorien, Reihen und gespeicherte Studien. Der Aufbau (Reihen, Fenster,
 // bis zu 4 Versionen mit Filtern) wird im Browser gemerkt; "Auswerten" schickt ihn an /api/eventstudie/analyse.
@@ -11677,7 +11786,7 @@ function esErgebnisZeichnen() {
       <div class="es-n-kachel es-zufall"><i></i><span>Zufällige Tage</span><b>${gz0.format(r.ziehungen)}</b><small>Ziehungen</small></div></div>
     ${warnung.length ? `<p class="gg-lage es-warnung">${warnung.join('<br>')}</p>` : ''}
     ${r.reihen.map((s, k) => esReiheKarte(s, k, r, stufeText)).join('')}`;
-  r.reihen.forEach((s, k) => { if (!s.fehler) { esChart(el(`es-chart-${k}`), s, r); esHisto(el(`es-histo-${k}`), s, r); } });
+  r.reihen.forEach((s, k) => { if (!s.fehler) esChart(el(`es-chart-${k}`), s, r); });
   box.querySelectorAll('[data-es-zeige]').forEach((z) => z.addEventListener('click', () => { es.auswahl = z.dataset.esZeige; esAuswahlZeigen(); }));
 }
 
@@ -11703,12 +11812,11 @@ function esReiheKarte(s, k, r, stufeText) {
       <td>${v.gegen_erste ? `${esDiff(v.gegen_erste.differenz, s.einheit)} <small class="sekundaer">p ${esP(v.gegen_erste.p)}</small>` : '–'}</td></tr>`;
   });
   return ggKarte(`es-r-${k}`, s.name, [
-    ['Hauptgrafik', `Durchschnittlicher Verlauf je Version ab dem Schluss vor Tag 0 (${s.einheit_text}), mit 90-%-Band. Grau: Bereich, in dem der Durchschnitt gleich vieler zufälliger Tage lag. Senkrecht durchgezogen: Tag 0, gestrichelt: der Schritt für die Kennzahlen.`],
-    ['Verteilung', `Reaktion jedes einzelnen Events bis ${stufeText}. Zeigt, ob der Durchschnitt von einem einzigen Ausreißer kommt.`],
+    ['Hauptgrafik', `Kräftige Linien: durchschnittlicher Verlauf je Version ab dem Schluss vor Tag 0 (${s.einheit_text}), mit 90-%-Band (so sicher ist der Durchschnitt). Blasse graue Linien: 30 ganz normale, zufällig gezogene Zeiträume derselben Reihe; das graue Band zeigt, wo der Durchschnitt gleich vieler zufälliger Tage in 90 % der Fälle lag. Liegt eine Version klar außerhalb, ist sie ungewöhnlich.`],
+    ['Rand rechts', `Verteilung der einzelnen Reaktionen bis ${stufeText}: grau für normale Tage, farbig je Version (bei weniger als 8 Events als Striche, eine Kurve wäre dann geraten). Zeigt, ob der Durchschnitt von einem einzigen Ausreißer kommt.`],
     ['p-Wert', 'Anteil der Zufallsziehungen, die mindestens so extrem waren. Unter 0,05 = auffällig, darüber kann es Zufall sein.'],
   ], `<p class="gg-lage es-fazit">${esFazit(s, r, stufeText)}</p>
     <div class="es-chart" id="es-chart-${k}"></div>
-    <div class="es-unter"><div><h3 class="pg-unter">Verteilung bis ${stufeText}</h3><div class="es-histo" id="es-histo-${k}"></div></div></div>
     ${ggTabelle(['Version', 'n', 'Ø', 'Median', 'im Plus', 'Streuung', 'Zufall Ø', 'Zufall im Plus', 'p gegen Zufall', 'gegen Version 1'], zeilen, 'es-tabelle')}`,
   `Daten bis ${datumDe(s.stand.slice(0, 10))}`);
 }
@@ -11724,77 +11832,37 @@ function esTicks(lo, hi, anzahl = 5) {
 }
 
 function esChart(feld, s, r) {
-  if (!feld) return;
-  const breite = feld.clientWidth || 600, hoehe = 300, rand = { l: 52, r: 12, o: 12, u: 28 };
   const schritte = s.versionen[0]?.schritte ?? [];
-  if (!schritte.length) { feld.innerHTML = ''; return; }
-  const werte = [];
-  s.versionen.forEach((v) => { v.mittel.forEach((x) => x !== null && werte.push(x)); v.band.forEach(([a, b]) => { if (a !== null) werte.push(a, b); }); if (es.einzel) v.einzel.forEach((e) => e.werte.forEach((x) => x !== null && werte.push(x))); });
+  if (!feld || !schritte.length) return;
   const basis = s.versionen.find((v) => v.basis)?.basis;
-  basis?.band.forEach(([a, b]) => { if (a !== null) werte.push(a, b); });
-  werte.push(0);
-  const ticks = esTicks(Math.min(...werte), Math.max(...werte));
-  const lo = ticks[0], hi = ticks.at(-1);
-  const x = (i) => rand.l + (i / Math.max(1, schritte.length - 1)) * (breite - rand.l - rand.r);
-  const y = (v) => rand.o + ((hi - v) / (hi - lo || 1)) * (hoehe - rand.o - rand.u);
-  const linie = (reihe) => reihe.map((v, i) => (v === null ? null : `${x(i).toFixed(1)} ${y(v).toFixed(1)}`)).reduce((acc, p) => { if (p === null) { acc.offen = false; return acc; } acc.d += `${acc.offen ? 'L' : 'M'}${p}`; acc.offen = true; return acc; }, { d: '', offen: false }).d;
-  const band = (b) => { const ok = b.map((p, i) => [p, i]).filter(([p]) => p[0] !== null); if (!ok.length) return ''; return `M${ok.map(([p, i]) => `${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join('L')}L${ok.reverse().map(([p, i]) => `${x(i).toFixed(1)} ${y(p[0]).toFixed(1)}`).join('L')}Z`; };
   const i0 = schritte.indexOf(0), is = schritte.indexOf(r.stufe);
-  const einheit = (t) => (s.einheit === 'bp' ? gz0.format(t) : s.einheit === 'punkte' ? gz1.format(t) : `${gz1.format(t)} %`);
-  // Beschriftung nur so oft, dass mindestens 30 px dazwischen liegen (Handy)
-  const jede = Math.max(1, Math.ceil(30 / ((breite - rand.l - rand.r) / Math.max(1, schritte.length - 1))));
-  const xBeschr = schritte.map((st, i) => ({ st, i })).filter(({ st }) => st % jede === 0);
-  const einzel = es.einzel ? s.versionen.map((v, vi) => v.einzel.map((e) => `<path class="es-einzel ${ES_FARBEN[vi]}${es.auswahl === e.id ? ' gewaehlt' : ''}" d="${linie(e.werte)}" data-es-id="${esc(e.id)}"><title>${esc(r.events[e.id]?.titel ?? '')}</title></path>`).join('')).join('') : '';
-  feld.innerHTML = `<div class="es-chart-innen"><svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}">
-    ${ticks.map((t) => `<line class="${t === 0 ? 'lc-null' : 'lc-gitter'}" x1="${rand.l}" x2="${breite - rand.r}" y1="${y(t)}" y2="${y(t)}"/><text class="c-achse" x="${rand.l - 8}" y="${y(t) + 4}" text-anchor="end">${einheit(t)}</text>`).join('')}
-    ${xBeschr.map(({ st, i }) => `<text class="c-achse" x="${x(i)}" y="${hoehe - 8}" text-anchor="middle">${st > 0 ? '+' : ''}${st}</text>`).join('')}
-    ${i0 >= 0 ? `<line class="es-null" x1="${x(i0)}" x2="${x(i0)}" y1="${rand.o}" y2="${hoehe - rand.u}"/>` : ''}
-    ${is >= 0 && is !== i0 ? `<line class="es-stufe" x1="${x(is)}" x2="${x(is)}" y1="${rand.o}" y2="${hoehe - rand.u}"/>` : ''}
-    ${basis ? `<path class="es-basis-band" d="${band(basis.band)}"/><path class="es-basis" d="${linie(basis.mittel)}"/>` : ''}
-    ${einzel}
-    ${s.versionen.map((v, vi) => `<path class="es-band ${ES_FARBEN[vi]}" d="${band(v.band)}"/>`).join('')}
-    ${s.versionen.map((v, vi) => `<path class="es-linie ${ES_FARBEN[vi]}" d="${linie(v.mittel)}"/>`).join('')}
-    <line class="lc-zeiger" y1="${rand.o}" y2="${hoehe - rand.u}" visibility="hidden"/>
-    <rect class="es-fang" x="${rand.l}" y="${rand.o}" width="${breite - rand.l - rand.r}" height="${hoehe - rand.o - rand.u}" fill="transparent"${es.einzel ? ' pointer-events="none"' : ''}/>
-  </svg><div class="c-tip lc-tip" hidden></div></div>
-  <p class="lc-legende">${s.versionen.map((v, vi) => `<span class="${ES_FARBEN[vi]}"><i></i>${esc(v.name)} (n = ${v.n})</span>`).join('')}${basis ? '<span class="es-zufall"><i></i>Zufällige Tage (90 %)</span>' : ''}<span class="sekundaer">${r.modus === 'minute' ? 'Minuten' : 'Handelstage'} ab dem Event</span></p>`;
-  const svg = feld.querySelector('svg'), tip = feld.querySelector('.lc-tip'), zeiger = feld.querySelector('.lc-zeiger');
-  const zeigen = (cx) => {
-    const px = cx - svg.getBoundingClientRect().left;
-    const i = Math.max(0, Math.min(schritte.length - 1, Math.round(((px - rand.l) / (breite - rand.l - rand.r)) * (schritte.length - 1))));
-    zeiger.setAttribute('x1', x(i)); zeiger.setAttribute('x2', x(i)); zeiger.setAttribute('visibility', 'visible');
-    tip.innerHTML = `<small>${r.modus === 'minute' ? 'Minute' : 'Tag'} ${schritte[i] > 0 ? '+' : ''}${schritte[i]}</small>${s.versionen.map((v, vi) => `<div class="${ES_FARBEN[vi]}"><span><i></i>${esc(v.name)}</span><span>${esWert(v.mittel[i], s.einheit)}</span></div>`).join('')}${basis ? `<div class="es-zufall"><span><i></i>Zufall</span><span>${esWert(basis.mittel[i], s.einheit)}</span></div>` : ''}`;
-    tip.hidden = false;
-    const platz = tip.offsetWidth + 12;
-    tip.style.left = `${x(i) + platz < breite ? x(i) + 12 : Math.max(0, x(i) - platz)}px`;
-  };
-  svg.addEventListener('pointermove', (e) => zeigen(e.clientX));
-  svg.addEventListener('pointerdown', (e) => zeigen(e.clientX));
-  svg.addEventListener('pointerleave', () => { tip.hidden = true; zeiger.setAttribute('visibility', 'hidden'); });
-  svg.querySelectorAll('.es-einzel').forEach((p) => p.addEventListener('click', () => { es.auswahl = p.dataset.esId; esAuswahlZeigen(); }));
-}
-
-function esHisto(feld, s, r) {
-  if (!feld) return;
-  const alle = s.versionen.flatMap((v) => v.werte.filter((x) => x !== null));
-  if (!alle.length) { feld.innerHTML = '<p class="sekundaer">Keine Werte.</p>'; return; }
-  const breite = feld.clientWidth || 500, hoehe = 150, rand = { l: 8, r: 8, o: 8, u: 24 };
-  let lo = Math.min(0, ...alle), hi = Math.max(0, ...alle);
-  if (lo === hi) { lo -= 1; hi += 1; }
-  const n = Math.min(16, Math.max(6, Math.round(Math.sqrt(alle.length) * 2)));
-  const w = (hi - lo) / n;
-  const faecher = s.versionen.map((v) => { const z = Array(n).fill(0); v.werte.forEach((x) => { if (x !== null) z[Math.min(n - 1, Math.floor((x - lo) / w))]++; }); return z; });
-  const maxZ = Math.max(1, ...faecher.flat());
-  const x = (v) => rand.l + ((v - lo) / (hi - lo)) * (breite - rand.l - rand.r);
-  const bw = (breite - rand.l - rand.r) / n / s.versionen.length;
-  const basis = s.versionen.find((v) => v.basis)?.basis;
-  const einheit = (t) => esWert(t, s.einheit, gz1);
-  feld.innerHTML = `<svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}">
-    ${faecher.map((z, vi) => z.map((c, j) => (c ? `<rect class="es-saeule ${ES_FARBEN[vi]}" x="${x(lo + j * w) + vi * bw + 1}" y="${rand.o + (1 - c / maxZ) * (hoehe - rand.o - rand.u)}" width="${Math.max(1, bw - 2)}" height="${(c / maxZ) * (hoehe - rand.o - rand.u)}"><title>${einheit(lo + j * w)} bis ${einheit(lo + (j + 1) * w)}: ${c} Events (${esc(s.versionen[vi].name)})</title></rect>` : '')).join('')).join('')}
-    <line class="es-null" x1="${x(0)}" x2="${x(0)}" y1="${rand.o}" y2="${hoehe - rand.u}"/>
-    ${basis?.mittel_stufe != null ? `<line class="es-stufe" x1="${x(basis.mittel_stufe)}" x2="${x(basis.mittel_stufe)}" y1="${rand.o}" y2="${hoehe - rand.u}"><title>Zufall Ø</title></line>` : ''}
-    <text class="c-achse" x="${rand.l}" y="${hoehe - 6}">${einheit(lo)}</text><text class="c-achse" x="${breite - rand.r}" y="${hoehe - 6}" text-anchor="end">${einheit(hi)}</text>
-    <text class="c-achse" x="${x(0)}" y="${hoehe - 6}" text-anchor="middle">0</text></svg>`;
+  const achse = (v) => (s.einheit === 'bp' ? gz0.format(v) : s.einheit === 'punkte' ? gz1.format(v) : `${gz1.format(v)} %`);
+  const wort = r.modus === 'minute' ? 'Minute' : 'Tag';
+  qfChart(feld, {
+    titel: `${s.name} um die Events`, x: schritte, hoehe: 330,
+    xText: (st, i, lang) => `${lang ? `${wort} ` : ''}${st > 0 ? '+' : ''}${st}`,
+    format: (v, istAchse) => (istAchse ? achse(v) : esWert(v, s.einheit)),
+    pfade: (basis?.beispiele ?? []).slice(0, 30).map((w) => ({ werte: w, klasse: 'es-zufall' })),
+    baender: [
+      ...(basis ? [{ lo: basis.band.map((x) => x[0]), hi: basis.band.map((x) => x[1]), klasse: 'es-zufall', staerke: 1 }] : []),
+      ...s.versionen.map((v, vi) => ({ lo: v.band.map((x) => x[0]), hi: v.band.map((x) => x[1]), klasse: ES_FARBEN[vi], staerke: 1 })),
+    ],
+    spuren: es.einzel ? s.versionen.flatMap((v, vi) => v.einzel.map((e) => ({ werte: e.werte, klasse: ES_FARBEN[vi], id: e.id, titel: r.events[e.id]?.titel, gewaehlt: es.auswahl === e.id }))) : [],
+    linien: [
+      ...(basis ? [{ werte: basis.mittel, klasse: 'es-zufall', name: 'Zufällige Tage', gestrichelt: true, kurz: 'Zufall' }] : []),
+      ...s.versionen.map((v, vi) => ({ werte: v.mittel, klasse: ES_FARBEN[vi], name: `${v.name} (n = ${v.n})`, breit: true, kurz: v.name.length > 15 ? `${v.name.slice(0, 14)}…` : v.name })),
+    ],
+    refX: [...(i0 >= 0 ? [{ i: i0, text: 'Event', art: 'stark' }] : []), ...(is >= 0 && is !== i0 ? [{ i: is }] : [])],
+    rand: { titel: `${wort} ${r.stufe > 0 ? '+' : ''}${r.stufe}`, reihen: [...(basis ? [{ werte: basis.stichprobe, klasse: 'es-zufall' }] : []), ...s.versionen.map((v, vi) => ({ werte: v.werte, klasse: ES_FARBEN[vi] }))] },
+    enden: true, endenBreite: 118,
+    beiKlick: (id) => { es.auswahl = id; esAuswahlZeigen(); },
+    tipZeilen: (i) => [
+      ...s.versionen.map((v, vi) => [`${v.name}`, v.mittel[i], ES_FARBEN[vi]]),
+      ...s.versionen.map((v, vi) => [`  90 % der Mittel`, v.band[i]?.[0] == null ? null : `${esWert(v.band[i][0], s.einheit)} bis ${esWert(v.band[i][1], s.einheit)}`, ES_FARBEN[vi]]),
+      ...(basis ? [['Zufällige Tage', basis.mittel[i], 'es-zufall'], ['  Zufall 90 %', basis.band[i]?.[0] == null ? null : `${esWert(basis.band[i][0], s.einheit)} bis ${esWert(basis.band[i][1], s.einheit)}`, 'es-zufall']] : []),
+    ],
+    legendeZusatz: `${basis ? '<span class="es-zufall qf-leg-pfad"><i></i>Einzelne normale Zeiträume (30 Beispiele)</span>' : ''}<span class="sekundaer">Rechts: Verteilung bei ${wort} ${r.stufe > 0 ? '+' : ''}${r.stufe}${s.versionen.some((v) => v.n < 8) ? ' (wenige Events als Striche)' : ''}</span>`,
+  });
 }
 
 // ---------- Events: Tabelle des Ergebnisses, Vorschläge, eigene Events ----------
@@ -12130,7 +12198,7 @@ async function mcLaden() {
   box.innerHTML = `${regler}${ggLage(lage)}${ggKarte('mc-karte', 'Mögliche Verläufe über ein Jahr', [
     ['Wie gerechnet wird', `Aus den Tagesrenditen deines heutigen Depots (heutige Gewichte, in Euro) von ${datumDe(h.von)} bis ${datumDe(h.bis)} werden ${gz0.format(d.pfade)} mögliche Jahre zusammengesetzt, in Blöcken von ${d.block} Handelstagen (Block-Bootstrap), damit ruhige und unruhige Phasen zusammenbleiben.`],
     ['Rendite', 'Die heutigen Positionen sind oft die Gewinner der letzten Jahre; deren Rückblick-Rendite wäre für die Zukunft geschönt. Standard: Schwankung und Ausreißer aus der Vergangenheit, aber eine durchschnittliche Rendite von 7 % pro Jahr (langfristiger Aktienschnitt). Wählbar sind 0 % und die historische Rendite.'],
-    ['Fächer', 'Die Linien zeigen, unter welchem Wert 5, 25, 50, 75 und 95 % der Verläufe am jeweiligen Tag liegen. Die Mitte liegt etwas über der angenommenen Rendite, weil seltene starke Verlusttage den Durchschnitt stärker drücken als die Mitte.'],
+    ['Fächer', 'Blasse Linien: 50 einzelne simulierte Jahre (gleichmäßig vom schlechtesten bis zum besten ausgewählt). Dunkles Band: die mittlere Hälfte der Verläufe, helles Band: 90 % (5 bis 95 %). Kräftige Linie: die Mitte. Rechts am Rand die Verteilung des Depotwerts nach einem Jahr. Die Mitte liegt etwas über der angenommenen Rendite, weil seltene starke Verlusttage den Durchschnitt stärker drücken als die Mitte.'],
     ['Nicht enthalten', 'Ereignisse, die es im Zeitraum nicht gab; Einzahlungen, Umschichtungen, Steuern, Gebühren. Die Gewichte bleiben täglich gleich. Eine Bandbreite, keine Vorhersage.'],
   ], `<div class="st-chips">
       <div class="st-chip"><span>Mitte nach 1 Jahr</span><b>${gz0.format(eu.p50)} €</b><small>${ggPz(e.p50)}</small></div>
@@ -12138,15 +12206,27 @@ async function mcLaden() {
       <div class="st-chip"><span>Schlechteste 5 %</span><b class="minus">unter ${gz0.format(eu.p5)} €</b><small>${ggPz(e.p5)}</small></div>
       <div class="st-chip"><span>Größter Rückgang unterwegs</span><b>${ggPz(d.tief_median)}</b><small>typisch; in 5 % schlimmer als ${ggPz(d.tief_p5)}</small></div>
       <div class="st-chip"><span>Historie</span><b>${gz1.format(h.vol)} %</b><small>Schwankung p. a. · schlechtester Tag ${ggPz(h.schlechtester_tag)}</small></div></div>
-    <div class="r-grafik" id="mc-faecher"></div><h3 class="pg-unter">Verteilung nach einem Jahr</h3><div class="r-grafik" id="mc-hist"></div>
+    <div class="r-grafik" id="mc-faecher"></div>
     ${d.ohne.length ? `<p class="klein sekundaer">Ohne Kurse: ${esc(d.ohne.join(', '))}</p>` : ''}`, `${gz0.format(d.tage_historie)} Handelstage Historie`)}`;
-  linienChart(el('mc-faecher'), { daten, nullpunkt: false, hoehe: 260, format: (v) => `${gz0.format(v)} €`, linien: [{ wert: d.wert, text: 'heute' }], serien: [
-    { name: '95 %', klasse: 'lc-grau', werte: d.faecher.p95 }, { name: '75 %', klasse: 'lc-sp', werte: d.faecher.p75 }, { name: 'Mitte', klasse: 'lc-depot', werte: d.faecher.p50 },
-    { name: '25 %', klasse: 'lc-sp', werte: d.faecher.p25 }, { name: '5 %', klasse: 'lc-grau', werte: d.faecher.p5 }] });
-  // Histogramm: Verlust-Bereiche rot, Gewinn-Bereiche grün
-  const hm = d.histogramm, hoch = Math.max(...hm.anzahl), n = hm.anzahl.length, breite = 100 / n;
-  el('mc-hist').innerHTML = `<svg class="mc-hist" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Verteilung des Depotwerts nach einem Jahr">${hm.anzahl.map((a, i) => `<rect class="${hm.mitte[i] < 0 ? 'minus' : 'plus'}" x="${i * breite + breite * 0.1}" y="${100 - (a / hoch) * 96}" width="${breite * 0.8}" height="${(a / hoch) * 96}"><title>um ${ggPz(hm.mitte[i])}: ${gz0.format(a)} Verläufe</title></rect>`).join('')}</svg>
-    <div class="op-oi-x">${[0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1].map((i) => `<span style="left:${i * breite + breite / 2}%">${ggPz(hm.mitte[i])}</span>`).join('')}</div>`;
+  const f = d.faecher, monat = (t) => { const x = new Date(heute); x.setDate(x.getDate() + Math.round(t * 365 / 252)); return x; };
+  qfChart(el('mc-faecher'), {
+    titel: 'Mögliche Verläufe des Depots', x: f.tage, hoehe: 340, ohneNull: true,
+    xText: (t, i, lang) => (lang ? `${monat(t).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })} · Handelstag ${t}` : t === 0 ? 'heute' : monat(t).toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })),
+    format: (v, istAchse) => (istAchse ? `${gz1.format(v / 1000).replace(/,0$/, '')} T€` : `${gz0.format(v)} € (${ggPz((v / d.wert - 1) * 100)})`),
+    pfade: (d.beispiele ?? []).filter((_, i) => i % 3 === 0).map((w) => ({ werte: w, klasse: 'es-zufall' })),
+    baender: [{ lo: f.p5, hi: f.p95, klasse: 'es-v0', staerke: 1 }, { lo: f.p25, hi: f.p75, klasse: 'es-v0', staerke: 2 }],
+    linien: [
+      { werte: f.p95, klasse: 'es-v0 unsichtbar', kurz: '95 %', endText: ggPz(e.p95) },
+      { werte: f.p50, klasse: 'es-v0', name: 'Mitte (Median)', breit: true, kurz: 'Mitte', endText: ggPz(e.p50) },
+      { werte: f.p5, klasse: 'es-v0 unsichtbar', kurz: '5 %', endText: ggPz(e.p5) },
+    ],
+    refY: [{ wert: d.wert }],
+    rand: { titel: 'in 1 Jahr', reihen: [{ werte: d.stichprobe ?? [], klasse: 'es-v0' }] },
+    enden: true,
+    tipZeilen: (i) => [['95 % liegen darunter', f.p95[i], 'es-v0'], ['75 %', f.p75[i], 'es-v0'], ['Mitte', f.p50[i], 'es-v0'], ['25 %', f.p25[i], 'es-v0'], ['5 % liegen darunter', f.p5[i], 'es-v0']],
+    legendeEintraege: [{ name: 'Mitte', klasse: 'es-v0' }],
+    legendeZusatz: '<span class="es-v0 qf-leg-band"><i></i>mittlere Hälfte (25–75 %)</span><span class="es-v0 qf-leg-band hell"><i></i>90 % der Verläufe (5–95 %)</span><span class="es-zufall qf-leg-pfad"><i></i>50 einzelne simulierte Jahre</span>',
+  });
   mcBinden();
 }
 function mcBinden() {
@@ -13291,6 +13371,55 @@ function opOiBild(o, kurs) {
   </figure>`;
 }
 
+// ---- RSI: Was geschah danach? (app/markt/rsi_folgen.py) ----
+const caRsiWahl = { art: 'oben', h: 20 };
+async function caRsi(ticker) {
+  const box = el('ca-rsi-karte');
+  if (!box) return;
+  box.innerHTML = '<section class="karte th-karte"><p class="sekundaer">RSI-Auswertung wird gerechnet …</p></section>';
+  let d;
+  try { d = await api(`/api/chart/rsi?ticker=${encodeURIComponent(ticker)}`); } catch { d = { fehler: 'Die RSI-Auswertung konnte nicht geladen werden.' }; }
+  if (caDaten?.ticker !== ticker || !el('ca-rsi-karte')) return;
+  caRsiZeichnen(d);
+}
+function caRsiZeichnen(d) {
+  const box = el('ca-rsi-karte');
+  if (d.fehler) { box.innerHTML = `<section class="karte th-karte"><h2>RSI: Was danach geschah</h2>${ggFehler(d)}</section>`; return; }
+  const w = caRsiWahl, a = d.arten[w.art], h = String(w.h), k = a.horizonte[h], nrm = d.normal[w.h];
+  const name = w.art === 'oben' ? `RSI über ${d.oben}` : `RSI unter ${d.unten}`;
+  const seit = new Date(d.von).getFullYear();
+  const lage = d.rsi_heute === null ? '' : d.rsi_heute >= d.oben ? `Heute liegt der RSI bei ${gz0.format(d.rsi_heute)}, also über ${d.oben}.` : d.rsi_heute <= d.unten ? `Heute liegt der RSI bei ${gz0.format(d.rsi_heute)}, also unter ${d.unten}.` : `Heute liegt der RSI bei ${gz0.format(d.rsi_heute)}, kein Signal.`;
+  const fazit = !a.n || !k ? `${name}: seit ${seit} kein Signal.` : `${esc(d.ticker)}: Nach ${name} (${a.n} Mal seit ${seit}) lag der Kurs ${w.h} Handelstage später im Schnitt bei <b class="${klasse(k.mittel)}">${ggPz(k.mittel)}</b> (Median ${ggPz(k.median)}, ${gz0.format(k.treffer)} % im Plus); an normalen Tagen ${ggPz(nrm.mittel)} (${gz0.format(nrm.treffer)} % im Plus). ${k.p == null ? '' : k.p < 0.05 ? `<b>Auffällig anders als normal</b> (p ${esP(k.p)}).` : `Nicht von normalen Tagen zu unterscheiden (p ${esP(k.p)}).`}${a.n < 10 ? ' Wenige Fälle: die Zahlen schwanken stark.' : ''} ${lage}`;
+  const zeilen = d.horizonte.map((hz) => { const x = a.horizonte[String(hz)], y = d.normal[hz]; return x ? `<tr${hz === w.h ? ' class="es-zeile-klick gewaehlt"' : ''}><td>${hz} Tage</td><td><b class="${x.n < 10 ? 'es-wenig' : ''}">${x.n}</b></td><td class="${klasse(x.mittel)}">${ggPz(x.mittel)}</td><td class="${klasse(x.median)}">${ggPz(x.median)}</td><td>${x.treffer == null ? '–' : `${gz0.format(x.treffer)} %`}</td><td>${ggPz(y.mittel)}</td><td>${gz0.format(y.treffer)} %</td><td class="${x.p != null && x.p < 0.05 ? 'es-sig' : ''}">${esP(x.p)}</td></tr>` : ''; });
+  box.innerHTML = ggKarte('ca-rsi', 'RSI: Was danach geschah', [
+    ['Signal', `Der RSI (${d.laenge} Tage) schließt zum ersten Mal über ${d.oben} bzw. unter ${d.unten}, nachdem er vorher auf der anderen Seite war. Ein neues Signal zählt erst nach 10 Handelstagen Abstand, sonst würden lange überkaufte Phasen viele fast gleiche Fälle liefern.`],
+    ['Messung', 'Ab dem Schluss am Signaltag (früher konnte man es nicht wissen), Kurse bereinigt, bis 10 Jahre zurück. Blasse farbige Linien: jedes einzelne Signal; kräftig: der Durchschnitt. Grau: 30 Beispiele normaler Tage und der Bereich, in dem der Durchschnitt gleich vieler zufälliger Tage in 90 % der Fälle lag.'],
+    ['p-Wert', 'Wie oft zufällige Tage mindestens so weit vom Normalen weg waren. Unter 0,05 gilt als auffällig. Bei Aktien, die lange gestiegen sind, liegen auch normale Tage im Plus: deshalb der Vergleich.'],
+    ['Wichtig', 'Beschreibt die Vergangenheit dieser einen Aktie. Kein Kauf- oder Verkaufssignal.'],
+  ], `<div class="ab-regler">${ggKnoepfe('ca-rsi-art', [['oben', `über ${d.oben} (überkauft)`], ['unten', `unter ${d.unten} (überverkauft)`]], w.art)}${ggKnoepfe('ca-rsi-h', d.horizonte.map((x) => [String(x), `${x} Tage`]), h)}</div>
+    <p class="gg-lage">${fazit}</p><div class="es-chart" id="ca-rsi-chart"></div>
+    ${ggTabelle(['Nach', 'Signale', 'Ø nach Signal', 'Median', 'im Plus', 'Ø normale Tage', 'normale im Plus', 'p'], zeilen, 'es-tabelle')}`, `Kurse bis ${datumDe(d.stand)}`);
+  const klasseArt = w.art === 'oben' ? 'es-v1' : 'es-v2';
+  if (a.n) qfChart(el('ca-rsi-chart'), {
+    titel: `Kurs nach ${name}`, x: d.schritte, hoehe: 300,
+    xText: (t, i, lang) => (lang ? `${t >= 0 ? `${t} Handelstage nach` : `${-t} Handelstage vor`} dem Signal` : `${t > 0 ? '+' : ''}${t}`),
+    format: (v, istAchse) => (istAchse ? `${gz0.format(v)} %` : ggPz(v)),
+    pfade: d.zufall_beispiele.map((z) => ({ werte: z, klasse: 'es-zufall' })),
+    baender: [{ lo: a.zufall_band.map((x) => x[0]), hi: a.zufall_band.map((x) => x[1]), klasse: 'es-zufall', staerke: 1 }],
+    spuren: a.signale.map((s) => ({ werte: s.werte, klasse: klasseArt, id: s.datum, titel: `${datumDe(s.datum)} · RSI ${gz0.format(s.rsi)}` })),
+    linien: [{ werte: a.zufall_mittel, klasse: 'es-zufall', name: 'Normale Tage', gestrichelt: true, kurz: 'normal' },
+      { werte: a.mittel, klasse: klasseArt, name: `Nach ${name} (n = ${a.n})`, breit: true, kurz: 'Signal' }],
+    refX: [{ i: d.schritte.indexOf(0), text: 'Signal', art: 'stark' }, { i: d.schritte.indexOf(w.h) }],
+    rand: { titel: `nach ${w.h} T.`, reihen: [{ werte: k?.werte ?? [], klasse: klasseArt }] },
+    enden: true, endenBreite: 96,
+    tipZeilen: (i) => [[`Nach ${name}`, a.mittel[i], klasseArt], ['  Median', a.median[i], klasseArt], ['Normale Tage', a.zufall_mittel[i], 'es-zufall'],
+      ['  Zufall 90 %', a.zufall_band[i]?.[0] == null ? null : `${ggPz(a.zufall_band[i][0])} bis ${ggPz(a.zufall_band[i][1])}`, 'es-zufall']],
+    legendeZusatz: '<span class="es-zufall qf-leg-pfad"><i></i>Einzelne normale Zeiträume</span><span class="sekundaer">Dünne farbige Linien: jedes Signal einzeln (Datum beim Darüberfahren)</span>',
+  });
+  ggFilterKlick(box, 'ca-rsi-art', (x) => { w.art = x; caRsiZeichnen(d); });
+  ggFilterKlick(box, 'ca-rsi-h', (x) => { w.h = Number(x); caRsiZeichnen(d); });
+}
+
 async function caOptionen(ticker) {
   const box = el('ca-optionen-karte');
   if (!box) return;
@@ -13374,6 +13503,7 @@ function caZeichnen() {
       ['RSI', 'Nur als Zusatzinfo, fließt nicht in die Zusammenfassung ein.'],
     ], m ? caMomentumInhalt(m, d) : '')}
     <div id="ca-optionen-karte"></div>
+    <div id="ca-rsi-karte"></div>
     <div id="ca-alerts-karte"></div>
     <div id="ca-trades-karte"></div>`;
   caZeichneKopf();
@@ -13393,6 +13523,7 @@ function caZeichnen() {
   caZeichneTrades();
   caPeerKachel(caDaten?.ticker);
   caOptionen(d.ticker);
+  caRsi(d.ticker);
   caMeineLaden(d.ticker);
 }
 

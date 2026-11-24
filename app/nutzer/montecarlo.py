@@ -74,6 +74,11 @@ def auswertung(b: Benutzer, positionen: list[dict], jahre: int = 3, rendite: str
     tief = (verlauf / np.maximum.accumulate(verlauf, axis=1)).min(axis=1)
     stufen = [5, 25, 50, 75, 95]
     faecher = {f"p{q}": [round(float(x) * wert, 2) for x in np.percentile(verlauf, q, axis=0)[::5]] for q in stufen}
+    # 150 Beispielpfade für die Grafik (blasse Linien), gleichmäßig über die Endwerte verteilt, damit Ränder dabei sind
+    reihenfolge = np.argsort(ende)
+    auswahl = reihenfolge[np.linspace(0, len(ende) - 1, 150).astype(int)]
+    beispiele = [[round(float(x) * wert) for x in verlauf[i, ::5]] for i in auswahl]
+    stichprobe = [round(float(x) * wert) for x in ende[np.random.default_rng(5).choice(len(ende), 1500, replace=False)]]
     hist, kanten = np.histogram((ende - 1) * 100, bins=40)
     return {
         "wert": wert, "jahre": jahre, "tage_historie": len(depot), "pfade": PFADE, "block": BLOCK, "rendite": rendite, "rendite_pa": RENDITEN[rendite],
@@ -85,6 +90,7 @@ def auswertung(b: Benutzer, positionen: list[dict], jahre: int = 3, rendite: str
                        "schlechtester_tag": float(depot.min()) * 100, "bester_tag": float(depot.max()) * 100,
                        "von": depot.index[0].strftime("%Y-%m-%d"), "bis": depot.index[-1].strftime("%Y-%m-%d")},
         "faecher": {"tage": list(range(0, TAGE, 5)), **faecher},
+        "beispiele": beispiele, "stichprobe": stichprobe,
         "histogramm": {"mitte": [round(float((a + c) / 2), 1) for a, c in zip(kanten, kanten[1:])], "anzahl": [int(x) for x in hist]},
         "ohne": [p["name"] for p in pos if p["ticker"] not in r.columns],
     }

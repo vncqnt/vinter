@@ -1031,6 +1031,18 @@ def tafel_speichern(request: Request, daten: dict = Body(...), b: Benutzer = Ich
         return {"fehler": "Das Dashboard konnte nicht gespeichert werden."}
 
 
+@app.get("/api/chart/rsi")
+def chart_rsi(ticker: str, oben: float = 70, unten: float = 30, laenge: int = 14):
+    """RSI: Was geschah nach Signalen über 70 bzw. unter 30 (app/markt/rsi_folgen.py)."""
+    from .markt.abruf import gecacht, STUNDE
+    from .markt.rsi_folgen import analyse
+    t = ticker.strip().upper()[:20]
+    try:
+        return gecacht(f"rsi-folgen:{t}:{oben}:{unten}:{laenge}", 6 * STUNDE, lambda: analyse(t, oben, unten, laenge))
+    except Exception:
+        return {"fehler": "Für diesen Wert gibt es gerade keine Kurshistorie."}
+
+
 @app.get("/api/optionen")
 def optionen_aktie(ticker: str):
     """Put/Call, Open Interest, Max Pain, auffällige Aktivität, Spread, Short (app/markt/optionen.py)."""

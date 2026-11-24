@@ -277,7 +277,14 @@ def auswerten(reihe: pd.Series, events: list[dict], von: int, bis: int, einheit:
         if len(z):
             with np.errstate(all="ignore"):
                 einzel = zufall_einzel(werte, von, bis, einheit, bereich, k[s])
+                # Beispiele normaler Tage für die Grafik: 80 zufällige Fenster als blasse Linien, 600 Werte für die Verteilung
+                rng = np.random.default_rng(9)
+                lo, hi = max(1, bereich[0], 1 - von), min(bereich[1], len(werte) - 1 - bis)
+                beispiel = pfade(werte, list(rng.integers(lo, hi + 1, size=80)), von, bis, einheit)
+                stich = rng.choice(einzel, size=min(600, len(einzel)), replace=False) if len(einzel) else np.array([])
                 aus["basis"] = {
+                    "beispiele": [[rund(x) for x in zeile] for zeile in beispiel],
+                    "stichprobe": [rund(x) for x in stich],
                     "mittel": [rund(x) for x in np.nanmedian(z, axis=0)],
                     "band": [[rund(a), rund(b)] for a, b in zip(np.nanpercentile(z, 5, axis=0), np.nanpercentile(z, 95, axis=0))],
                     "treffer": round(float((einzel > 0).mean() * 100), 1) if len(einzel) else None,
