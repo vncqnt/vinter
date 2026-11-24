@@ -4106,3 +4106,51 @@ line.gx-p-flip { stroke: var(--grau); stroke-dasharray: 2 4; vector-effect: non-
 .lc-legende .qf-leg-pfad i { height: 1px; width: 14px; border-radius: 0; background: var(--es); opacity: .6; vertical-align: middle; }
 .lc-legende .es-v0 i, .lc-legende .es-v1 i, .lc-legende .es-v2 i, .lc-legende .es-v3 i, .lc-legende .es-zufall i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--es); margin-right: .3rem; }
 .lc-tip .es-v0 span:first-child, .lc-tip .es-v1 span:first-child, .lc-tip .es-v2 span:first-child, .lc-tip .es-v3 span:first-child, .lc-tip .es-zufall span:first-child { white-space: pre; }
+
+/* ---- Szenario-Rechner ---- */
+#szenario-inhalt input:not([type="checkbox"]):not([type="radio"]), #szenario-inhalt select { font: inherit; font-size: .875rem; color: var(--text); background: var(--karte-fest); border: 1px solid var(--linie); border-radius: 8px; padding: .35rem .55rem; color-scheme: dark; }
+#szenario-inhalt input[type="number"] { width: 5rem; font-variant-numeric: tabular-nums; }
+.sz-tabelle td { white-space: nowrap; }
+.sz-tabelle td:first-child input { width: 100%; min-width: 11rem; }
+.sz-gross { font-size: .8125rem; color: var(--grau); }
+.sz-rechnet { opacity: .55; transition: opacity .2s; }
+.sz-eigen-flaeche { fill: var(--akzent); opacity: .1; }
+.sz-markt-flaeche { fill: var(--grau); opacity: .12; }
+.sz-mehr { fill: var(--akzent); opacity: .16; }
+.sz-eigen-linie { fill: none; stroke: var(--akzent); stroke-width: 1.8; }
+.sz-markt-linie { fill: none; stroke: var(--grau); stroke-width: 1.4; stroke-dasharray: 4 3; }
+.sz-leiste { margin: .75rem 0 .25rem; }
+.sz-leiste-bahn { position: relative; height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--text) 7%, transparent); }
+.sz-leiste-bereich { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: color-mix(in srgb, var(--grau) 65%, transparent); }
+.sz-leiste-markt, .sz-leiste-ich { position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%); }
+.sz-leiste-markt { background: var(--grau); transform: translate(-50%, -50%) rotate(45deg); }
+.sz-leiste-ich { background: var(--akzent); border-radius: 50%; box-shadow: 0 0 0 2px var(--grund); }
+.sz-leiste-achse { position: relative; height: 1.2rem; font-family: "Space Mono", ui-monospace, monospace; font-size: 10px; color: var(--leise); }
+.sz-leiste-achse span { position: absolute; transform: translateX(-50%); top: 4px; white-space: nowrap; }
+.sz-leiste-achse span.anfang { transform: none; }
+.sz-leiste-achse span.ende { transform: translateX(-100%); }
+.sz-punkt { display: inline-block; width: 8px; height: 8px; vertical-align: middle; }
+.sz-punkt.ich { background: var(--akzent); border-radius: 50%; }
+.sz-punkt.markt { background: var(--grau); transform: rotate(45deg); }
+.sz-heat { display: grid; grid-template-columns: 4.5rem repeat(var(--spalten), minmax(2.6rem, 1fr)); gap: 0; font-family: "Space Mono", ui-monospace, monospace; font-size: 10.5px; overflow-x: auto; }
+.sz-heat-ecke { grid-column: 1; font-family: inherit; color: var(--leise); font-size: 9px; align-self: end; padding-bottom: .3rem; }
+.sz-heat-kopf, .sz-heat-zeile { color: var(--leise); text-align: center; padding: .25rem 0; }
+.sz-heat-zeile { text-align: right; padding-right: .5rem; align-self: center; }
+.sz-zelle { position: relative; text-align: center; padding: .55rem 0; color: var(--text); border: 0 solid var(--text); }
+.sz-zelle.k-r { border-right-width: 2px; }
+.sz-zelle.k-u { border-bottom-width: 2px; }
+.sz-zelle i { position: absolute; top: 0; right: 3px; font-style: normal; font-size: 13px; line-height: 1; }
+.sz-ich { color: var(--akzent); }
+.sz-markt { color: var(--text); opacity: .8; }
+@media (max-width: 700px) {
+  .sz-tabelle thead { display: none; }
+  .sz-tabelle, .sz-tabelle tbody { display: block; }
+  .sz-tabelle tr { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .75rem; padding: .6rem 0; border-bottom: 1px solid var(--linie); }
+  .sz-tabelle td { padding: 0; border: 0; font-size: .8125rem; color: var(--grau); }
+  .sz-tabelle td:first-child { flex-basis: 100%; }
+  .sz-tabelle td:first-child input { min-width: 0; }
+  #szenario-inhalt .sz-tabelle input[type="number"] { width: 3.6rem; }
+  .sz-tabelle td:nth-child(2)::before { content: "Wahrsch. "; }
+  .sz-tabelle td:nth-child(3)::before { content: "Bewegung "; }
+  .sz-tabelle td:nth-child(4)::before { content: "Unsich. "; }
+}

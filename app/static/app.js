@@ -11482,7 +11482,7 @@ function qfChart(feld, o) {
   const jede = Math.max(1, Math.ceil(60 / (innen / Math.max(1, n - 1))));
   const ganz = o.x.every((v) => Number.isInteger(v)) && o.x.some((v) => v < 0);
   const rund = ganz ? [1, 2, 5, 10, 20, 50, 100, 200].find((s) => s >= jede) ?? jede : jede;
-  const xAchse = o.x.map((v, i) => i).filter((i) => (ganz ? o.x[i] % rund === 0 : i % jede === 0 || i === n - 1)).filter((i, k, a) => ganz || i !== n - 1 || (i - (a[k - 1] ?? -99)) * innen / Math.max(1, n - 1) > 40)
+  const xAchse = o.x.map((v, i) => i).filter((i) => (ganz ? o.x[i] % rund === 0 : i % jede === 0))
     .map((i) => `<text class="c-achse" x="${x(i)}" y="${hoehe - 8}" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${esc(o.xText ? o.xText(o.x[i], i) : o.x[i])}</text>`).join('');
   // Randverteilung: seitliche Dichte je Reihe, bei wenigen Werten nur Striche (Rug)
   let randSvg = '';
@@ -11544,6 +11544,227 @@ function qfChart(feld, o) {
   svg.addEventListener('pointerdown', (e) => zeigen(e.clientX));
   svg.addEventListener('pointerleave', weg);
   if (klick) svg.querySelectorAll('.qf-spur').forEach((p) => p.addEventListener('click', () => o.beiKlick(p.dataset.qfId)));
+}
+
+// ---- Szenario-Rechner: app/markt/szenario.py, app/nutzer/szenario.py ----
+// Ablauf: /api/szenario liefert die gespeicherten Sets; jede Änderung im Editor rechnet nach kurzer Pause über
+// /api/szenario/rechnen neu (Mischverteilung, Optionsmarkt, Heatmap, Pfade). Speichern unter /api/szenario/set.
+const sz = { sets: [], aktiv: null, ergebnis: null, laeuft: 0 };
+const szSenden = (pfad, methode, daten) => fetch(pfad, { method: methode, headers: { 'content-type': 'application/json', 'x-vinter': 'szenario' }, body: daten ? JSON.stringify(daten) : undefined })
+  .then((r) => r.json()).catch(() => ({ fehler: 'Server nicht erreichbar.' }));
+const szEuro = (pct) => (sz.ergebnis?.position_eur && pct != null ? `${ggVz(pct / 100 * sz.ergebnis.position_eur, gz0)} €` : '');
+
+async function szLaden() {
+  let d;
+  try { d = await fetch('/api/szenario').then((r) => r.json()); } catch { d = { sets: [] }; }
+  sz.sets = d.sets ?? [];
+  if (!sz.aktiv) {
+    try { sz.aktiv = JSON.parse(localStorage.getItem('szAktiv') || 'null'); } catch {}
+    sz.aktiv ??= structuredClone(sz.sets.at(-1) ?? d.beispiel);
+  }
+  szZeichnen();
+  szRechnen();
+}
+
+function szSumme() { return sz.aktiv.szenarien.reduce((a, s) => a + (Number(s.p) || 0), 0); }
+
+function szZeichnen() {
+  const box = el('szenario-inhalt'), a = sz.aktiv;
+  const summe = szSumme();
+  const zeilen = a.szenarien.map((s, i) => `<tr>
+    <td><input type="text" data-sz="name" data-i="${i}" value="${esc(s.name)}" maxlength="60" aria-label="Name von Szenario ${i + 1}"></td>
+    <td><input type="number" data-sz="p" data-i="${i}" value="${s.p}" min="0" max="100" step="1" aria-label="Wahrscheinlichkeit"> %</td>
+    <td><input type="number" data-sz="bewegung" data-i="${i}" value="${s.bewegung}" min="-95" max="300" step="0.5" aria-label="Kursbewegung"> %</td>
+    <td>± <input type="number" data-sz="unsicherheit" data-i="${i}" value="${s.unsicherheit}" min="0" max="90" step="0.5" aria-label="Unsicherheit"> %</td>
+    <td><label class="sz-gross"><input type="radio" name="sz-gross" data-sz-gross="${i}" ${Number(a.gross) === i ? 'checked' : ''}> groß</label></td>
+    <td>${a.szenarien.length > 2 ? `<button type="button" class="es-x" data-sz-weg="${i}" aria-label="Szenario entfernen">×</button>` : ''}</td></tr>`).join('');
+  box.innerHTML = `
+    ${ggLage('Szenarien ausdenken, jedem eine Wahrscheinlichkeit und eine Kursbewegung geben, und Vinter macht daraus eine Verteilung: Erwartungswert, Risiko in Euro, wie der Optionsmarkt dieselbe Frage einschätzt und wie oft deine Kurs-Level vorher erreicht werden.')}
+    ${sz.sets.length ? `<div class="es-studien"><span class="sekundaer">Gespeichert</span>${sz.sets.map((s) => `<span class="es-studie"><button type="button" class="knopf klein${s.id === a.id ? ' primaer' : ''}" data-sz-set="${esc(s.id)}">${esc(s.name)}</button><button type="button" class="es-x" data-sz-set-weg="${esc(s.id)}" aria-label="${esc(s.name)} löschen">×</button></span>`).join('')}<button type="button" class="knopf klein" id="sz-neu">Neu</button></div>` : ''}
+    <section class="karte es-aufbau">
+      <div class="es-zeile"><input type="text" id="sz-name" value="${esc(a.name)}" maxlength="60" aria-label="Name"><label class="es-zahl">Aktie <input type="text" id="sz-ticker" value="${esc(a.ticker)}" maxlength="20" style="width:7rem"></label>
+        <label class="es-zahl">Stichtag <input type="date" id="sz-datum" value="${esc(a.datum)}"></label></div>
+      <div class="gg-tabelle-rahmen"><table class="gg-tabelle sz-tabelle"><thead><tr><th>Szenario</th><th>Wahrscheinlichkeit</th><th>Kursbewegung</th><th>Unsicherheit</th><th title="Für dieses Szenario rechnet Vinter aus, welche Wahrscheinlichkeit der Optionsmarkt einpreist">Markt-Vergleich</th><th></th></tr></thead><tbody>${zeilen}</tbody></table></div>
+      <div class="es-zeile">${a.szenarien.length < 5 ? '<button type="button" class="knopf klein" id="sz-plus">+ Szenario</button>' : ''}
+        <span class="${Math.abs(summe - 100) < 0.5 ? 'plus' : 'minus'}">Summe ${gz0.format(summe)} %${Math.abs(summe - 100) < 0.5 ? '' : ' – muss 100 % ergeben'}</span>
+        <button type="button" class="knopf" id="sz-speichern">Speichern</button></div>
+    </section>
+    <div id="sz-ergebnis"><p class="sekundaer">Wird gerechnet …</p></div>
+    <details class="karte es-methode"><summary>Methode, Quellen und Grenzen</summary>
+      <p><b>Deine Verteilung:</b> Jedes Szenario ist eine Glockenkurve um seine Kursbewegung (Breite = deine Unsicherheit). Dazu kommt die normale Schwankung der Aktie bis zum Stichtag: robust aus den letzten 120 Handelstagen, ohne einzelne Sprungtage, damit ein früheres Ereignis nicht doppelt zählt. Zusammen ergibt das bei Ja/Nein-Fragen eine Verteilung mit zwei Gipfeln.</p>
+      <p><b>Kennzahlen:</b> Erwartungswert = Summe aus Wahrscheinlichkeit × Bewegung (plus etwas Zinseszins-Effekt der Schwankung). Erwartete Ausschlagsgröße = wie weit es im Schnitt geht, egal in welche Richtung. Schlechteste 5 % (VaR) und Schnitt der schlechtesten 5 % (Expected Shortfall), in Euro für deine Position.</p>
+      <p><b>Optionsmarkt:</b> Aus den Optionspreisen des ersten brauchbaren Verfalls ab dem Stichtag (Yahoo, verzögert) wird die Verteilung zurückgerechnet, die der Markt einpreist (Breeden-Litzenberger). Dann sucht Vinter die Wahrscheinlichkeit für dein „großes“ Szenario (und eine Grundschwankung zwischen 0,5- und 1,6-fach), mit der deine Szenarien diese Marktverteilung am besten treffen. Bereich = alle Werte, die fast genauso gut passen.</p>
+      <p><b>Wichtig:</b> Optionspreise sind „risikoneutral“: Sie enthalten eine Prämie für Absicherung. Absturz-Szenarien wirken dort deshalb meist etwas wahrscheinlicher, als sie wirklich sind. Ein Unterschied zu deiner Sicht ist ein Hinweis, kein Beweis. Gilt nur für US-Werte mit Optionen.</p>
+      <p><b>Pfade:</b> 3.000 Simulationen mit der normalen Schwankung, am Stichtag ein Sprung nach deinen Szenarien, danach 10 weitere Handelstage. Daraus die Chance, deine Kurs-Level aus der These vorher zu berühren. Keine Empfehlung.</p>
+    </details>`;
+  szBinden();
+  if (sz.ergebnis) szErgebnisZeichnen();
+}
+
+function szAendern() {
+  try { localStorage.setItem('szAktiv', JSON.stringify(sz.aktiv)); } catch {}
+  clearTimeout(sz.uhr);
+  sz.uhr = setTimeout(szRechnen, 500);
+}
+
+function szBinden() {
+  const box = el('szenario-inhalt'), a = sz.aktiv;
+  box.querySelectorAll('[data-sz]').forEach((f) => f.addEventListener('input', () => {
+    const s = a.szenarien[Number(f.dataset.i)], k = f.dataset.sz;
+    s[k] = k === 'name' ? f.value : Number(f.value);
+    if (k === 'p') { const summe = szSumme(); box.querySelector('.es-zeile span.plus, .es-zeile span.minus').outerHTML = `<span class="${Math.abs(summe - 100) < 0.5 ? 'plus' : 'minus'}">Summe ${gz0.format(summe)} %${Math.abs(summe - 100) < 0.5 ? '' : ' – muss 100 % ergeben'}</span>`; }
+    szAendern();
+  }));
+  box.querySelectorAll('[data-sz-gross]').forEach((f) => f.addEventListener('change', () => { a.gross = Number(f.dataset.szGross); szAendern(); }));
+  box.querySelectorAll('[data-sz-weg]').forEach((k) => k.addEventListener('click', () => { a.szenarien.splice(Number(k.dataset.szWeg), 1); if (a.gross >= a.szenarien.length) a.gross = 0; szZeichnen(); szAendern(); }));
+  el('sz-plus')?.addEventListener('click', () => { a.szenarien.push({ name: `Szenario ${a.szenarien.length + 1}`, p: 0, bewegung: 0, unsicherheit: 0 }); szZeichnen(); });
+  el('sz-name').addEventListener('input', (e) => { a.name = e.target.value; szAendern(); });
+  el('sz-ticker').addEventListener('change', (e) => { a.ticker = e.target.value.trim().toUpperCase(); szAendern(); });
+  el('sz-datum').addEventListener('change', (e) => { a.datum = e.target.value; szAendern(); });
+  el('sz-speichern').addEventListener('click', async () => {
+    const r = await szSenden('/api/szenario/set', 'POST', a);
+    if (r.fehler) { alert(r.fehler); return; }
+    sz.aktiv = r.set; await szLaden();
+  });
+  el('sz-neu')?.addEventListener('click', () => { sz.aktiv = { name: 'Neue Szenarien', ticker: a.ticker, datum: a.datum, gross: 0, szenarien: [{ name: 'Ereignis tritt ein', p: 20, bewegung: -10, unsicherheit: 3 }, { name: 'Ereignis bleibt aus', p: 80, bewegung: 1, unsicherheit: 0 }] }; szZeichnen(); szAendern(); });
+  box.querySelectorAll('[data-sz-set]').forEach((k) => k.addEventListener('click', () => { sz.aktiv = structuredClone(sz.sets.find((s) => s.id === k.dataset.szSet)); szZeichnen(); szAendern(); }));
+  box.querySelectorAll('[data-sz-set-weg]').forEach((k) => k.addEventListener('click', async () => {
+    if (!confirm('Diese Szenarien löschen?')) return;
+    await szSenden(`/api/szenario/set/${encodeURIComponent(k.dataset.szSetWeg)}`, 'DELETE');
+    if (sz.aktiv?.id === k.dataset.szSetWeg) delete sz.aktiv.id;
+    szLaden();
+  }));
+}
+
+async function szRechnen() {
+  if (Math.abs(szSumme() - 100) >= 0.5) { if (el('sz-ergebnis')) el('sz-ergebnis').innerHTML = '<p class="meldung">Die Wahrscheinlichkeiten müssen zusammen 100 % ergeben.</p>'; return; }
+  const nr = ++sz.laeuft;
+  if (el('sz-ergebnis') && !sz.ergebnis) el('sz-ergebnis').innerHTML = '<p class="sekundaer">Wird gerechnet (Optionsdaten, 3.000 Pfade) …</p>';
+  el('sz-ergebnis')?.classList.add('sz-rechnet');
+  const r = await fetch('/api/szenario/rechnen', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sz.aktiv) }).then((x) => x.json()).catch(() => ({ fehler: 'Server nicht erreichbar.' }));
+  if (nr !== sz.laeuft) return;
+  el('sz-ergebnis')?.classList.remove('sz-rechnet');
+  sz.ergebnis = r;
+  szErgebnisZeichnen();
+}
+
+function szErgebnisZeichnen() {
+  const box = el('sz-ergebnis'), r = sz.ergebnis;
+  if (!box) return;
+  if (r.fehler) { box.innerHTML = ggFehler(r); return; }
+  const k = r.kennzahlen, o = r.ohne_ereignis, m = r.markt ?? {}, fit = m.anpassung ?? {};
+  const gross = r.beitraege[r.gross], wer = r.position_name ?? r.ticker;
+  const ichP = gross.p * 100;
+  const euro = (v) => (r.position_eur ? ` (${szEuro(v)})` : '');
+  const satzMarkt = m.fehler ? `Einen Vergleich mit dem Optionsmarkt gibt es hier nicht (${esc(m.fehler)}).`
+    : fit.p != null ? `Der Optionsmarkt preist für „${esc(gross.name)}“ rund <b>${gz0.format(fit.p * 100)} %</b> ein (passend wären ${gz0.format(fit.von * 100)} bis ${gz0.format(fit.bis * 100)} %), du ${gz0.format(ichP)} %. ${ichP < fit.von * 100 ? 'Du siehst das Szenario deutlich seltener als der Markt.' : ichP > fit.bis * 100 ? 'Du siehst das Szenario deutlich häufiger als der Markt.' : 'Deine Einschätzung liegt im Bereich des Markts.'}${m.zwei_gipfel ? ' Die Marktverteilung hat selbst zwei Gipfel: Der Markt preist ein Ja/Nein-Ereignis ein.' : ''}` : '';
+  const lage = `${esc(wer)} bis ${datumDe(r.datum)} (${r.handelstage} Handelstage): Erwartungswert deiner Szenarien <b class="${klasse(k.mittel)}">${ggPz(k.mittel)}</b>${euro(k.mittel)}, ohne das Ereignis ${ggPz(o.mittel)}. Im Schnitt geht es um ${gz1.format(k.ausschlag)} % in eine Richtung (ohne Ereignis ${gz1.format(o.ausschlag)} %). In den schlechtesten 5 % der Fälle ${ggPz(k.var5)} oder weniger${euro(k.var5)}. ${satzMarkt}`;
+  const chip = (t, w, u = '', kl = '') => `<div class="st-chip"><span>${t}</span><b class="${kl}">${w}</b>${u ? `<small>${u}</small>` : ''}</div>`;
+  box.innerHTML = `${ggLage(lage)}
+    <div class="st-chips">
+      ${chip('Erwartungswert', ggPz(k.mittel), `${r.position_eur ? `${szEuro(k.mittel)} · ` : ''}ohne Ereignis ${ggPz(o.mittel)}`, klasse(k.mittel))}
+      ${chip('Erwartete Ausschlagsgröße', `±${gz1.format(k.ausschlag)} %`, `ohne Ereignis ±${gz1.format(o.ausschlag)} %${m.ausschlag != null ? ` · Markt ±${gz1.format(m.ausschlag)} % bis ${datumDe(m.verfall)}` : ''}`)}
+      ${chip('Schlechteste 5 %', ggPz(k.var5), `${r.position_eur ? `${szEuro(k.var5)} · ` : ''}Schnitt darunter ${ggPz(k.es5)}`, 'minus')}
+      ${chip('Verlust-Wahrscheinlichkeit', `${gz0.format(k.p_verlust)} %`, `Median ${ggPz(k.median)} · Schiefe ${gz2.format(k.schiefe)}`)}
+      ${chip('Normale Schwankung', `${gz0.format(r.sigma)} %`, 'pro Jahr, ohne Sprungtage')}
+    </div>
+    ${ggKarte('sz-vergleich', 'Deine Sicht gegen den Optionsmarkt', [
+      ['Lesart', 'Mint: deine Verteilung, grau: was der Optionsmarkt einpreist (beide bis zum selben Verfall). Wo deine Kurve höher liegt, hältst du diesen Bereich für wahrscheinlicher als der Markt.'],
+      ['Eingepreist', 'Die Leiste darunter zeigt, mit welcher Wahrscheinlichkeit für dein großes Szenario deine Szenarien die Marktverteilung am besten treffen. Optionen enthalten eine Absicherungsprämie, Absturz-Szenarien wirken dort meist etwas wahrscheinlicher.'],
+    ], m.fehler ? `<p class="sekundaer">${esc(m.fehler)}</p>` : `<div class="es-chart" id="sz-dichte"></div><div id="sz-leiste"></div>`, m.verfall ? `Optionen bis ${datumDe(m.verfall)}${m.abweichung_tage ? ` (${m.abweichung_tage} Tage nach dem Stichtag, früher gab es keinen brauchbaren Verfall)` : ''} · IV am Geld ${gz0.format(m.iv)} %` : '')}
+    ${ggKarte('sz-heat', `Wie weit darfst du danebenliegen? (${esc(gross.name)})`, [
+      ['Lesart', 'Jedes Feld: Erwartungswert, wenn das große Szenario diese Wahrscheinlichkeit (Spalten) und diese Kursbewegung (Zeilen) hätte, die anderen Szenarien bleiben im Verhältnis. Die Linie trennt Plus von Minus. ● = deine Einschätzung, ◆ = was der Optionsmarkt einpreist.'],
+    ], '<div id="sz-heatmap"></div>')}
+    ${ggKarte('sz-pfade', 'Mögliche Wege bis zum Stichtag und danach', [
+      ['Lesart', 'Blasse Linien: einzelne simulierte Verläufe. Bänder: mittlere Hälfte und 90 % der Verläufe. Am Stichtag springt der Kurs nach deinen Szenarien. Waagerechte Linien: deine Kurs-Level aus der These.'],
+    ], `<div class="es-chart" id="sz-sim"></div>${r.level.length ? ggTabelle(['Level aus der These', 'Kurs', 'Abstand', 'Wird vorher berührt'], r.level.map((l) => `<tr><td>${esc(l.name)}</td><td>${zahl2.format(l.eur)} €</td><td class="${klasse(l.abstand)}">${ggPz(l.abstand * 100)}</td><td><b>${l.beruehren == null ? '–' : `${gz0.format(l.beruehren)} %`}</b></td></tr>`), 'es-tabelle') : '<p class="klein sekundaer">Keine Kurs-Level in einer These für diesen Wert.</p>'}`)}
+    ${ggKarte('sz-beitrag', 'Woraus der Erwartungswert besteht', [['Lesart', 'Wahrscheinlichkeit × Kursbewegung je Szenario. Die Summe ist der Erwartungswert ohne die normale Schwankung.']],
+      ggTabelle(['Szenario', 'Wahrscheinlichkeit', 'Bewegung', 'Beitrag', r.position_eur ? 'in Euro' : ''], r.beitraege.map((b) => `<tr><td>${esc(b.name)}</td><td>${gz0.format(b.p * 100)} %</td><td class="${klasse(b.bewegung)}">${ggPz(b.bewegung)}</td><td class="${klasse(b.beitrag)}"><b>${ggVz(b.beitrag, gz2)} Pp.</b></td><td>${r.position_eur ? szEuro(b.beitrag) : ''}</td></tr>`), 'es-tabelle'))}`;
+  if (!m.fehler) { szDichte(el('sz-dichte'), r); szLeiste(el('sz-leiste'), r); }
+  szHeatmap(el('sz-heatmap'), r);
+  szSim(el('sz-sim'), r);
+}
+
+// Dichten übereinander, x = Kursbewegung in %
+function szDichte(feld, r) {
+  const m = r.markt, xs = r.x.map((x) => Math.expm1(x) * 100), eigen = m.dichte_eigen, markt = m.dichte;
+  const maxD = Math.max(...eigen, ...markt);
+  const sichtbar = xs.map((x, i) => (eigen[i] > maxD * 0.004 || markt[i] > maxD * 0.004));
+  const a = sichtbar.indexOf(true), b = sichtbar.lastIndexOf(true);
+  const X = xs.slice(a, b + 1), E = eigen.slice(a, b + 1), M = markt.slice(a, b + 1);
+  const breite = feld.clientWidth || 640, hoehe = 230, rand = { l: 16, r: 16, o: 12, u: 26 };
+  const lo = X[0], hi = X.at(-1);
+  const x = (v) => rand.l + ((v - lo) / (hi - lo)) * (breite - rand.l - rand.r);
+  const y = (v) => hoehe - rand.u - (v / maxD) * (hoehe - rand.o - rand.u);
+  const flaeche = (D) => `M${x(X[0])} ${y(0)}${X.map((v, i) => `L${x(v).toFixed(1)} ${y(D[i]).toFixed(1)}`).join('')}L${x(X.at(-1))} ${y(0)}Z`;
+  const linie = (D) => X.map((v, i) => `${i ? 'L' : 'M'}${x(v).toFixed(1)} ${y(D[i]).toFixed(1)}`).join('');
+  // Fläche, wo du mehr Wahrscheinlichkeit siehst als der Markt (min/max-Band)
+  const mehr = `M${x(X[0])} ${y(M[0])}${X.map((v, i) => `L${x(v).toFixed(1)} ${y(Math.max(E[i], M[i])).toFixed(1)}`).join('')}${X.map((v, i) => i).reverse().map((i) => `L${x(X[i]).toFixed(1)} ${y(M[i]).toFixed(1)}`).join('')}Z`;
+  const ticks = esTicks(lo, hi, 6).filter((t) => t >= lo && t <= hi);
+  feld.innerHTML = `<div class="es-chart-innen qf"><svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}" role="img" aria-label="Deine Verteilung gegen die des Optionsmarkts">
+    ${ticks.map((t) => `<line class="${t === 0 ? 'lc-null' : 'lc-gitter'}" x1="${x(t)}" x2="${x(t)}" y1="${rand.o}" y2="${hoehe - rand.u}"/><text class="c-achse" x="${x(t)}" y="${hoehe - 8}" text-anchor="middle">${t > 0 ? '+' : ''}${gz0.format(t)} %</text>`).join('')}
+    <path class="sz-markt-flaeche" d="${flaeche(M)}"/><path class="sz-mehr" d="${mehr}"/><path class="sz-eigen-flaeche" d="${flaeche(E)}"/>
+    <path class="sz-markt-linie" d="${linie(M)}"/><path class="sz-eigen-linie" d="${linie(E)}"/>
+    <line class="lc-zeiger" y1="${rand.o}" y2="${hoehe - rand.u}" visibility="hidden"/></svg><div class="c-tip lc-tip" hidden></div></div>
+    <p class="lc-legende"><span class="es-v0"><i></i>Deine Szenarien</span><span class="es-zufall"><i></i>Optionsmarkt</span><span class="es-v0 qf-leg-band"><i></i>hier siehst du mehr als der Markt</span></p>`;
+  const svg = feld.querySelector('svg'), tip = feld.querySelector('.lc-tip'), z = feld.querySelector('.lc-zeiger');
+  const cdf = (D) => { const s = D.reduce((p, q) => p + q, 0); let acc = 0; return D.map((v) => (acc += v) / s); };
+  const ce = cdf(E), cm = cdf(M);
+  svg.addEventListener('pointermove', (e) => {
+    const px = e.clientX - svg.getBoundingClientRect().left;
+    const v = lo + ((px - rand.l) / (breite - rand.l - rand.r)) * (hi - lo);
+    let i = X.findIndex((w) => w >= v); if (i < 0) i = X.length - 1;
+    z.setAttribute('x1', x(X[i])); z.setAttribute('x2', x(X[i])); z.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<small>Kurs ${X[i] >= 0 ? 'über' : 'unter'} ${ggPz(X[i])}</small><div class="es-v0"><span><i></i>Du</span><span>${gz0.format((X[i] >= 0 ? 1 - ce[i] : ce[i]) * 100)} %</span></div><div class="es-zufall"><span><i></i>Markt</span><span>${gz0.format((X[i] >= 0 ? 1 - cm[i] : cm[i]) * 100)} %</span></div>`;
+    tip.hidden = false; tip.style.left = `${Math.min(breite - tip.offsetWidth - 4, x(X[i]) + 12)}px`;
+  });
+  svg.addEventListener('pointerleave', () => { tip.hidden = true; z.setAttribute('visibility', 'hidden'); });
+}
+
+// Leiste 0–80 %: Bereich und Punkt des Markts, dein Punkt
+function szLeiste(feld, r) {
+  const fit = r.markt.anpassung, ich = r.beitraege[r.gross].p * 100;
+  if (!fit || fit.p == null) { feld.innerHTML = ''; return; }
+  const max = Math.max(80, ich + 5), pos = (v) => `${Math.min(100, (v / max) * 100)}%`;
+  feld.innerHTML = `<div class="sz-leiste" role="img" aria-label="Eingepreiste Wahrscheinlichkeit">
+    <div class="sz-leiste-bahn"><span class="sz-leiste-bereich" style="left:${pos(fit.von * 100)};width:calc(${pos(fit.bis * 100)} - ${pos(fit.von * 100)})"></span>
+      <span class="sz-leiste-markt" style="left:${pos(fit.p * 100)}" title="Markt ${gz0.format(fit.p * 100)} %"></span><span class="sz-leiste-ich" style="left:${pos(ich)}" title="Du ${gz0.format(ich)} %"></span></div>
+    <div class="sz-leiste-achse">${[0, 20, 40, 60, 80].filter((v) => v <= max).map((v, i, l) => `<span style="left:${pos(v)}" class="${i === 0 ? 'anfang' : i === l.length - 1 ? 'ende' : ''}">${v} %</span>`).join('')}</div>
+    <p class="klein"><span class="sz-punkt ich"></span> du ${gz0.format(ich)} % · <span class="sz-punkt markt"></span> Optionsmarkt ${gz0.format(fit.p * 100)} % · grau: ebenso passend (${gz0.format(fit.von * 100)}–${gz0.format(fit.bis * 100)} %) · Grundschwankung im Markt ${gz2.format(fit.sigma_faktor)}-fach der normalen</p></div>`;
+}
+
+function szHeatmap(feld, r) {
+  const h = r.heatmap, ich = r.beitraege[r.gross], fit = r.markt?.anpassung;
+  const maxAbs = Math.max(0.5, ...h.werte.flat().map(Math.abs));
+  const farbe = (v) => { const t = Math.min(1, Math.abs(v) / maxAbs); return v >= 0 ? `color-mix(in srgb, var(--gewinn) ${Math.round(12 + t * 55)}%, transparent)` : `color-mix(in srgb, var(--verlust) ${Math.round(12 + t * 55)}%, transparent)`; };
+  const naechst = (liste, v) => liste.reduce((b, x, i) => (Math.abs(x - v) < Math.abs(liste[b] - v) ? i : b), 0);
+  const ichZeile = naechst(h.bewegung, ich.bewegung), ichSpalte = naechst(h.p, ich.p);
+  const mSpalte = fit?.p != null ? naechst(h.p, fit.p) : -1;
+  // Break-even: Zelle bekommt eine Kante, wo das Vorzeichen zum Nachbarn wechselt
+  const kante = (z, s) => { const v = h.werte[z][s], c = []; if (s + 1 < h.p.length && Math.sign(h.werte[z][s + 1]) !== Math.sign(v)) c.push('r'); if (z + 1 < h.bewegung.length && Math.sign(h.werte[z + 1][s]) !== Math.sign(v)) c.push('u'); return c.map((x) => `k-${x}`).join(' '); };
+  feld.innerHTML = `<div class="sz-heat" style="--spalten:${h.p.length}">
+    <span class="sz-heat-ecke">Bewegung ↓ · Wahrscheinlichkeit →</span>${h.p.map((p) => `<span class="sz-heat-kopf">${gz0.format(p * 100)} %</span>`).join('')}
+    ${h.bewegung.map((bw, z) => `<span class="sz-heat-zeile">${ggPz(bw)}</span>${h.p.map((p, s) => `<span class="sz-zelle ${kante(z, s)}" style="background:${farbe(h.werte[z][s])}" title="${gz0.format(p * 100)} % × ${ggPz(bw)}: Erwartungswert ${ggPz(h.werte[z][s])}">${ggVz(h.werte[z][s], gz1)}${z === ichZeile && s === ichSpalte ? '<i class="sz-ich">●</i>' : ''}${z === ichZeile && s === mSpalte ? '<i class="sz-markt">◆</i>' : ''}</span>`).join('')}`).join('')}
+  </div>`;
+}
+
+function szSim(feld, r) {
+  const s = r.simulation, heute = new Date();
+  const datumBei = (t) => { const d = new Date(heute); d.setDate(d.getDate() + Math.round(t * 7 / 5)); return d; };
+  qfChart(feld, {
+    titel: 'Simulierte Verläufe', x: s.schritte, hoehe: 320,
+    xText: (t, i, lang) => (lang ? `${datumBei(t).toLocaleDateString('de-DE')} · Handelstag ${t}` : t === 0 ? 'heute' : datumBei(t).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })),
+    format: (v, achse) => (achse ? `${gz0.format(v)} %` : `${ggPz(v)}${r.position_eur ? ` (${szEuro(v)})` : ''}`),
+    pfade: s.beispiele.map((w) => ({ werte: w, klasse: 'es-zufall' })),
+    baender: [{ lo: s.p5, hi: s.p95, klasse: 'es-v0', staerke: 1 }, { lo: s.p25, hi: s.p75, klasse: 'es-v0', staerke: 2 }],
+    linien: [{ werte: s.p95, klasse: 'es-v0 unsichtbar', kurz: '95 %' }, { werte: s.p50, klasse: 'es-v0', name: 'Mitte', breit: true, kurz: 'Mitte' }, { werte: s.p5, klasse: 'es-v0 unsichtbar', kurz: '5 %' }],
+    refX: [{ i: s.stichtag, text: 'Stichtag', art: 'stark' }],
+    refY: [{ wert: 0 }, ...r.level.filter((l) => Math.abs(l.abstand) < 0.6).map((l) => ({ wert: l.abstand * 100, text: `${l.name} ${zahl2.format(l.eur)} €` }))],
+    rand: { titel: 'am Ende', reihen: [{ werte: s.ende, klasse: 'es-v0' }] }, enden: true, endenBreite: r.position_eur ? 128 : 76,
+    tipZeilen: (i) => [['95 % darunter', s.p95[i], 'es-v0'], ['Mitte', s.p50[i], 'es-v0'], ['5 % darunter', s.p5[i], 'es-v0']],
+    legendeEintraege: [{ name: 'Mitte', klasse: 'es-v0' }],
+    legendeZusatz: '<span class="es-v0 qf-leg-band"><i></i>mittlere Hälfte</span><span class="es-v0 qf-leg-band hell"><i></i>90 % der Verläufe</span><span class="es-zufall qf-leg-pfad"><i></i>einzelne Verläufe</span>',
+  });
 }
 
 // ---- Event Study: app/markt/eventstudie.py, app/nutzer/eventstudie.py ----
@@ -17202,7 +17423,7 @@ const GRUPPEN = [
   { titel: 'Risiko', teile: [['risiko', 'Kennzahlen'], ['faktoren', 'Faktoren'], ['positionsgroesse', 'Positionsgröße'], ['absicherung', 'Absicherung'], ['zertifikat', 'Faktor-Zertifikat']] },
   { titel: 'Volatilität & Gamma', teile: [['vola', 'Volatilität'], ['gamma', 'Gamma-Exposure']] },
   { titel: 'Szenarien', teile: [['stresstest', 'Stresstest'], ['makro', 'Zins, Öl, Dollar'], ['makrotage', 'Makro-Tage'], ['eventstudie', 'Event Study'], ['backtest', 'Backtest-Labor'], ['montecarlo', 'Monte-Carlo']] },
-  { titel: 'Thesen', teile: [['thesen', 'Thesen'], ['exits', 'Exit-Alarme'], ['dcf', 'Reverse-DCF'], ['chancen', 'Markt-Wahrscheinlichkeit']] },
+  { titel: 'Thesen', teile: [['thesen', 'Thesen'], ['exits', 'Exit-Alarme'], ['dcf', 'Reverse-DCF'], ['chancen', 'Markt-Wahrscheinlichkeit'], ['szenario', 'Szenario-Rechner']] },
   { titel: 'Journal', teile: [['journal', 'Trades & Begründungen'], ['exitanalyse', 'Exit-Analyse']] },
 ];
 const HAUPTSEITE = {};
@@ -17276,7 +17497,7 @@ function menueUnterZeigen(seite) {
   });
 }
 
-const SEITEN = ['home', 'tafel', 'uebersicht', 'performance', 'verteilung', 'freibetrag', 'maerkte', 'sektoren', 'themen', 'news', 'kalender', 'risiko', 'benchmark', 'stresstest', 'makro', 'earnings-moves', 'earnings-sheet', 'zahlen', 'rotation', 'prognosen', 'thesen', 'exits', 'watchlist', 'vola', 'gamma', 'volumen', 'faktoren', 'relativ', 'positionsgroesse', 'dcf', 'etf', 'stil', 'cashflow', 'positionierung', 'fonds', 'signale', 'nacht', 'geldfluss', 'chartanalyse', 'einstellungen', 'status', 'bewegung', 'weltkarte', 'handel', 'fundament', 'journal', 'exitanalyse', 'chancen', 'umbau', 'regime', 'events', 'insider', 'drift', 'paare', 'makrotage', 'eventstudie', 'absicherung', 'zertifikat', 'backtest', 'montecarlo', 'analysecharts', 'zinsen', 'makrodaten'];
+const SEITEN = ['home', 'tafel', 'uebersicht', 'performance', 'verteilung', 'freibetrag', 'maerkte', 'sektoren', 'themen', 'news', 'kalender', 'risiko', 'benchmark', 'stresstest', 'makro', 'earnings-moves', 'earnings-sheet', 'zahlen', 'rotation', 'prognosen', 'thesen', 'exits', 'watchlist', 'vola', 'gamma', 'volumen', 'faktoren', 'relativ', 'positionsgroesse', 'dcf', 'etf', 'stil', 'cashflow', 'positionierung', 'fonds', 'signale', 'nacht', 'geldfluss', 'chartanalyse', 'einstellungen', 'status', 'bewegung', 'weltkarte', 'handel', 'fundament', 'journal', 'exitanalyse', 'chancen', 'szenario', 'umbau', 'regime', 'events', 'insider', 'drift', 'paare', 'makrotage', 'eventstudie', 'absicherung', 'zertifikat', 'backtest', 'montecarlo', 'analysecharts', 'zinsen', 'makrodaten'];
 
 // Unter dem Logo: das Datum.
 function setzeBegruessung() {
@@ -17338,6 +17559,7 @@ function zeigeSeite() {
   if (seite === 'absicherung') abLaden();
   if (seite === 'makrotage') mtLaden();
   if (seite === 'eventstudie') esLaden();
+  if (seite === 'szenario') szLaden();
   if (seite === 'paare') paLaden();
   if (seite === 'drift') drLaden();
   if (seite === 'insider') icLaden();

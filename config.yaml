@@ -1,7 +1,7 @@
 # Home-Assistant-Add-on "Vinter". Wird vom Supervisor direkt aus diesem Repository gebaut.
 # Nur als Host: kein Ingress, kein Seitenleisten-Eintrag, eigener Port mit eigener Anmeldung.
 name: Vinter
-version: "0.13.0"
+version: "0.14.0"
 slug: vinter
 description: Persönliches Markt- und Depot-Dashboard (nur lesen, kein Handel)
 arch:

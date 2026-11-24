@@ -1031,6 +1031,49 @@ def tafel_speichern(request: Request, daten: dict = Body(...), b: Benutzer = Ich
         return {"fehler": "Das Dashboard konnte nicht gespeichert werden."}
 
 
+# ---- Szenario-Rechner (app/markt/szenario.py, app/nutzer/szenario.py) ----
+@app.get("/api/szenario")
+def szenario_liste(b: Benutzer = Ich):
+    from .nutzer.szenario import beispiel, sets
+    return {"sets": sets(b), "beispiel": beispiel()}
+
+
+@app.post("/api/szenario/rechnen")
+async def szenario_rechnen(request: Request, b: Benutzer = Ich):
+    from .nutzer.szenario import rechnen
+    try:
+        eingabe = await request.json()
+    except Exception:
+        return JSONResponse({"fehler": "Ungültige Eingabe."}, status_code=400)
+    depot = _depot(b)
+    try:
+        return await run_in_threadpool(rechnen, b, eingabe, depot.get("positionen", []) if "fehler" not in depot else [])
+    except ValueError as f:
+        return {"fehler": str(f)}
+    except Exception as f:
+        return {"fehler": f"Die Rechnung ist fehlgeschlagen ({type(f).__name__}). Gibt es für den Ticker Kurse bei Yahoo?"}
+
+
+@app.post("/api/szenario/set")
+async def szenario_speichern(request: Request, b: Benutzer = Ich):
+    from .nutzer.szenario import speichern
+    if request.headers.get("x-vinter") != "szenario":
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    try:
+        return {"set": speichern(b, await request.json())}
+    except ValueError as f:
+        return {"fehler": str(f)}
+
+
+@app.delete("/api/szenario/set/{sid}")
+def szenario_loeschen(sid: str, request: Request, b: Benutzer = Ich):
+    from .nutzer.szenario import loeschen
+    if request.headers.get("x-vinter") != "szenario":
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    loeschen(b, sid)
+    return {"ok": True}
+
+
 @app.get("/api/chart/rsi")
 def chart_rsi(ticker: str, oben: float = 70, unten: float = 30, laenge: int = 14):
     """RSI: Was geschah nach Signalen über 70 bzw. unter 30 (app/markt/rsi_folgen.py)."""
