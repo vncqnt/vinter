@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from starlette.concurrency import run_in_threadpool
 from fastapi import Body, Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.gzip import GZipMiddleware
@@ -92,6 +93,9 @@ def hintergrund_starten():
     nachrichten_reaktion.starte()
     from .markt.nachrichten import telegram as nachrichten_telegram
     nachrichten_telegram.starte()
+    # Event Study: Minutenkurse der wichtigsten Reihen jeden Abend sichern (Yahoo liefert sie nur ~30 Tage)
+    from .markt import minuten as minutendaten
+    minutendaten.starte()
     # Lädt einmal am Tag die großen Datenmengen für "Großes Geld" (S&P-500-Kurse, KGVs, FINRA, 13F).
     starte_grosses_geld()
     # Punkt 29b: "Warum bewegt sich der Markt?" alle 30 Minuten zur Handelszeit und nach Börsenschluss.
@@ -1234,6 +1238,141 @@ async def paare_speichern(request: Request, b: Benutzer = Ich):
         return {"paare": speichern(b, daten.get("paare") or [])}
     except Exception:
         return JSONResponse({"fehler": "Ungültige Eingabe."}, status_code=400)
+
+
+# ---- Event Study (app/markt/eventstudie.py, app/nutzer/eventstudie.py) ----
+
+def _es_erlaubt(request: Request) -> bool:
+    return request.headers.get("x-vinter") == "eventstudie"
+
+
+@app.get("/api/eventstudie")
+def eventstudie_uebersicht(b: Benutzer = Ich):
+    from .nutzer.eventstudie import uebersicht
+    try:
+        d = uebersicht(b)
+    except Exception:
+        return {"fehler": "Die Events konnten gerade nicht geladen werden."}
+    depot = _depot(b)
+    d["depot"] = [{"schluessel": f"t:{p['ticker']}", "name": p.get("name") or p["ticker"]}
+                  for p in depot.get("positionen", []) if p.get("ticker") and not p.get("extra")] if "fehler" not in depot else []
+    try:
+        from .markt.minuten import umfang
+        d["minuten"] = umfang()
+    except Exception:
+        d["minuten"] = None
+    return d
+
+
+@app.post("/api/eventstudie/analyse")
+async def eventstudie_analyse(request: Request, b: Benutzer = Ich):
+    from .nutzer.eventstudie import analyse
+    try:
+        anfrage = await request.json()
+    except Exception:
+        return JSONResponse({"fehler": "Ungültige Eingabe."}, status_code=400)
+    try:
+        return await run_in_threadpool(analyse, b, anfrage)
+    except Exception as f:
+        return {"fehler": f"Die Auswertung ist fehlgeschlagen ({type(f).__name__})."}
+
+
+@app.api_route("/api/eventstudie/event", methods=["POST", "PUT"])
+async def eventstudie_event(request: Request, b: Benutzer = Ich):
+    from .nutzer.eventstudie import event_speichern
+    if not _es_erlaubt(request):
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    try:
+        return {"event": event_speichern(b, await request.json())}
+    except ValueError as f:
+        return {"fehler": str(f)}
+
+
+@app.delete("/api/eventstudie/event/{eid}")
+def eventstudie_event_loeschen(eid: str, request: Request, b: Benutzer = Ich):
+    from .nutzer.eventstudie import event_loeschen
+    if not _es_erlaubt(request):
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    return {"ok": event_loeschen(b, eid)}
+
+
+@app.post("/api/eventstudie/csv")
+async def eventstudie_csv(request: Request, b: Benutzer = Ich):
+    from .nutzer.eventstudie import csv_import
+    if not _es_erlaubt(request):
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    roh = await request.body()
+    if len(roh) > 2_000_000:
+        return {"fehler": "Die Datei ist zu groß (höchstens 2 MB)."}
+    try:
+        text = roh.decode("utf-8")
+    except UnicodeDecodeError:
+        text = roh.decode("cp1252", errors="replace")
+    return csv_import(b, text)
+
+
+@app.post("/api/eventstudie/kategorie")
+async def eventstudie_kategorie(request: Request, b: Benutzer = Ich):
+    from .nutzer.eventstudie import kategorie_anlegen
+    if not _es_erlaubt(request):
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    d = await request.json()
+    try:
+        return kategorie_anlegen(b, d.get("name"), d.get("untertypen") or [])
+    except ValueError as f:
+        return {"fehler": str(f)}
+
+
+@app.get("/api/eventstudie/vorschlaege")
+def eventstudie_vorschlaege(b: Benutzer = Ich):
+    from .nutzer.eventstudie import vorschlaege
+    try:
+        return {"vorschlaege": vorschlaege(b)}
+    except Exception:
+        return {"vorschlaege": [], "fehler": "Der Newsfeed antwortet gerade nicht."}
+
+
+@app.post("/api/eventstudie/vorschlaege/{story}")
+async def eventstudie_vorschlag(story: int, request: Request, b: Benutzer = Ich):
+    """Body {event: {...}} übernimmt (mit Korrekturen), {event: null} verwirft."""
+    from .nutzer.eventstudie import vorschlag_erledigen
+    if not _es_erlaubt(request):
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    d = await request.json()
+    try:
+        return {"event": vorschlag_erledigen(b, story, d.get("event"))}
+    except ValueError as f:
+        return {"fehler": str(f)}
+
+
+@app.post("/api/eventstudie/studie")
+async def eventstudie_studie(request: Request, b: Benutzer = Ich):
+    from .nutzer.eventstudie import studie_speichern
+    if not _es_erlaubt(request):
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    try:
+        return {"studie": studie_speichern(b, await request.json())}
+    except ValueError as f:
+        return {"fehler": str(f)}
+
+
+@app.delete("/api/eventstudie/studie/{sid}")
+def eventstudie_studie_loeschen(sid: str, request: Request, b: Benutzer = Ich):
+    from .nutzer.eventstudie import studie_loeschen
+    if not _es_erlaubt(request):
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    studie_loeschen(b, sid)
+    return {"ok": True}
+
+
+@app.get("/api/eventstudie/marker")
+def eventstudie_marker(von: str | None = None, b: Benutzer = Ich):
+    """Eigene Events für die Charts (Tag 0 je Event)."""
+    from .nutzer.eventstudie import marker
+    try:
+        return {"marker": marker(b, von)}
+    except Exception:
+        return {"marker": []}
 
 
 @app.get("/api/makrotage")

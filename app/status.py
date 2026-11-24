@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 from .konfig import ANMELDUNG, DATEN, PROGRAMM
 
-VERSION = "0.11.0 (24.11.2026)"
+VERSION = "0.12.0 (25.11.2026)"
 START = datetime.now()
 _sperre = threading.Lock()
 _jobs: dict[str, dict] = {}

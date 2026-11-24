@@ -11437,6 +11437,530 @@ async function mtLaden() {
 }
 
 
+// ---- Event Study: app/markt/eventstudie.py, app/nutzer/eventstudie.py ----
+// Ablauf: /api/eventstudie lädt Events, Kategorien, Reihen und gespeicherte Studien. Der Aufbau (Reihen, Fenster,
+// bis zu 4 Versionen mit Filtern) wird im Browser gemerkt; "Auswerten" schickt ihn an /api/eventstudie/analyse.
+// Die Zahl der Events je Version rechnet der Browser selbst mit denselben Regeln wie der Server (esFiltern).
+const ES_STANDARD = {
+  reihen: ['spx', 'us10'], von: -5, bis: 10, stufe: 1, modus: 'tag',
+  versionen: [
+    { name: 'Zoll-Eskalation', filter: { kategorien: ['handel'], richtung: ['Eskalation'] } },
+    { name: 'Zoll-Rücknahme', filter: { kategorien: ['handel'], richtung: ['Deeskalation'] } },
+  ],
+};
+const es = { daten: null, anfrage: null, ergebnis: null, offen: 0, einzel: false, auswahl: null, sort: { spalte: 'zeit', ab: true },
+  form: null, vorschlaege: null, suche: '', laedt: false, meldung: '' };
+try { es.anfrage = JSON.parse(localStorage.getItem('esAnfrage') || 'null'); } catch {}
+if (!es.anfrage?.versionen?.length) es.anfrage = structuredClone(ES_STANDARD);
+const esMerken = () => { try { localStorage.setItem('esAnfrage', JSON.stringify(es.anfrage)); } catch {} };
+const esSenden = (pfad, methode, daten, roh = false) => fetch(pfad, {
+  method: methode, headers: { 'x-vinter': 'eventstudie', ...(roh ? { 'content-type': 'text/csv' } : { 'content-type': 'application/json' }) },
+  body: daten === undefined ? undefined : roh ? daten : JSON.stringify(daten),
+}).then((r) => r.json()).catch(() => ({ fehler: 'Server nicht erreichbar.' }));
+const ES_FARBEN = ['es-v0', 'es-v1', 'es-v2', 'es-v3'];
+const ES_ZEITPUNKT = ['vorbörslich', 'Handelszeit', 'nachbörslich', 'Wochenende'];
+const ES_TREND = ['nach Rally', 'seitwärts', 'nach Rückgang'];
+const ES_VIX = ['VIX niedrig', 'VIX hoch'];
+const ES_HOCH = ['nahe Hoch', 'unter Hoch', 'deutlich unter Hoch'];
+
+async function esLaden(neu = false) {
+  if (!es.daten || neu) {
+    try { es.daten = await fetch('/api/eventstudie').then((r) => r.json()); } catch { es.daten = { fehler: 'Die Events konnten nicht geladen werden.' }; }
+  }
+  esZeichnen();
+  if (es.vorschlaege === null) {
+    es.vorschlaege = [];
+    fetch('/api/eventstudie/vorschlaege').then((r) => r.json()).then((d) => { es.vorschlaege = d.vorschlaege ?? []; esEventsZeichnen(); }).catch(() => {});
+  }
+  if (!es.ergebnis && !es.daten.fehler) esAuswerten();
+}
+
+// ---------- Hilfen ----------
+const esKatName = (k) => es.daten?.kategorien?.[k]?.name ?? k;
+const esUnterName = (k, u) => es.daten?.kategorien?.[k]?.untertypen?.[u] ?? u ?? '';
+const esWert = (v, einheit, f = gz2) => (v === null || v === undefined ? '–' : `${ggVz(v, einheit === 'bp' ? gz1 : f)} ${einheit === 'bp' ? 'Bp.' : einheit === 'punkte' ? 'Pkt.' : '%'}`);
+const esDiff = (v, einheit) => (einheit === 'prozent' ? (v === null || v === undefined ? '–' : `${ggVz(v, gz2)} Pp.`) : esWert(v, einheit));
+const esP = (p) => (p === null || p === undefined ? '–' : p < 0.001 ? '< 0,001' : gz2.format(p).replace(/^0,00$/, '0,001'));
+const esNy = (iso) => { // ISO → "JJJJ-MM-TTTHH:MM" in New Yorker Zeit (für das Eingabefeld)
+  const t = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
+  return `${t.year}-${t.month}-${t.day}T${t.hour}:${t.minute}`;
+};
+const esZeitText = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+function esTrifft(wert, auswahl) {
+  if (!auswahl?.length) return true;
+  const werte = Array.isArray(wert) ? wert : [wert];
+  return werte.some((w) => w && auswahl.includes(w));
+}
+function esFiltern(liste, f = {}) {
+  return liste.filter((e) => {
+    const m = e.merkmale ?? {}, l = e.lage ?? {};
+    if (f.von && e.zeit.slice(0, 10) < f.von) return false;
+    if (f.bis && e.zeit.slice(0, 10) > f.bis) return false;
+    if (f.nur_geprueft && e.pruefen) return false;
+    if (f.ohne_auto && e.herkunft === 'automatisch') return false;
+    return esTrifft(e.kategorie, f.kategorien) && esTrifft(`${e.kategorie}.${e.untertyp}`, f.untertypen)
+      && ['region', 'akteur', 'richtung', 'ueberraschung', 'staerke', 'status'].every((k) => esTrifft(m[k], f[k]))
+      && esTrifft(e.zeitpunkt, f.zeitpunkt) && esTrifft(e.tags, f.tags)
+      && esTrifft(l.trend, f.trend) && esTrifft(l.vix, f.vix) && esTrifft(l.hoch, f.hoch);
+  });
+}
+// Mögliche Werte je Merkmal: aus der Konfiguration und aus den vorhandenen Events
+function esWerte(key) {
+  const d = es.daten, m = d.merkmale ?? {};
+  const aus = (feld) => d.events.flatMap((e) => { const v = (e.merkmale ?? {})[feld]; return Array.isArray(v) ? v : v ? [v] : []; });
+  const zaehlen = (liste) => { const z = new Map(); liste.forEach((x) => z.set(x, (z.get(x) ?? 0) + 1)); return [...z.entries()].sort((a, b) => b[1] - a[1]).map(([x]) => x); };
+  if (key === 'kategorien') return Object.entries(d.kategorien).map(([k, v]) => [k, v.name]);
+  if (key === 'untertypen') {
+    const kats = es.anfrage.versionen[es.offen]?.filter?.kategorien;
+    return Object.entries(d.kategorien).filter(([k]) => !kats?.length || kats.includes(k))
+      .flatMap(([k, v]) => Object.entries(v.untertypen ?? {}).map(([u, n]) => [`${k}.${u}`, n]));
+  }
+  if (['region', 'akteur'].includes(key)) return [...new Set([...(m[key] ?? []), ...zaehlen(aus(key))])].slice(0, 30).map((x) => [x, x]);
+  if (['richtung', 'ueberraschung', 'staerke', 'status'].includes(key)) return [...new Set([...(m[key] ?? []), ...aus(key)])].map((x) => [x, x]);
+  if (key === 'zeitpunkt') return ES_ZEITPUNKT.map((x) => [x, x]);
+  if (key === 'trend') return ES_TREND.map((x) => [x, x]);
+  if (key === 'vix') return ES_VIX.map((x) => [x, x]);
+  if (key === 'hoch') return ES_HOCH.map((x) => [x, x]);
+  if (key === 'tags') return zaehlen(d.events.flatMap((e) => e.tags ?? [])).slice(0, 30).map((x) => [x, x]);
+  return [];
+}
+const ES_GRUPPEN = [['kategorien', 'Kategorie'], ['untertypen', 'Untertyp'], ['richtung', 'Richtung'], ['region', 'Region'], ['akteur', 'Akteur'],
+  ['ueberraschung', 'Überraschung'], ['staerke', 'Stärke'], ['status', 'Status'], ['zeitpunkt', 'Zeitpunkt'],
+  ['trend', 'Markt davor'], ['vix', 'VIX davor'], ['hoch', 'Abstand Allzeithoch'], ['tags', 'Tags']];
+
+// ---------- Aufbau der Studie ----------
+function esZeichnen() {
+  const box = el('eventstudie-inhalt'), d = es.daten;
+  if (!d || d.fehler) { box.innerHTML = ggFehler(d); return; }
+  const a = es.anfrage;
+  const alleReihen = [...d.reihen, ...(d.depot ?? []).map((x) => ({ ...x, gruppe: 'Meine Positionen', einheit: 'prozent' }))];
+  const reiheName = (k) => alleReihen.find((r) => r.schluessel === k)?.name ?? k.replace(/^t:/, '');
+  const gruppen = [...new Set(alleReihen.map((r) => r.gruppe))];
+  const studien = d.studien.map((s) => `<span class="es-studie"><button type="button" class="knopf klein" data-es-studie="${esc(s.id)}">${esc(s.name)}</button><button type="button" class="es-x" data-es-studie-weg="${esc(s.id)}" aria-label="Studie ${esc(s.name)} löschen">×</button></span>`).join('');
+  const versionen = a.versionen.map((v, i) => {
+    const n = esFiltern(d.events, v.filter).length;
+    return `<button type="button" class="es-version ${ES_FARBEN[i]}${i === es.offen ? ' aktiv' : ''}" data-es-version="${i}"><i></i><span>${esc(v.name)}</span><b class="${n < (d.wenig ?? 10) ? 'es-wenig' : ''}">${n}</b></button>`;
+  }).join('');
+  const v = a.versionen[es.offen] ?? a.versionen[0], f = v.filter ?? {};
+  const chips = ES_GRUPPEN.map(([k, name]) => {
+    const werte = esWerte(k);
+    if (!werte.length) return '';
+    const gewaehlt = f[k] ?? [];
+    return `<div class="es-gruppe"><span class="es-gruppe-name">${name}</span><div class="es-chips">${werte.map(([w, n]) => `<button type="button" class="es-chip" data-es-f="${k}" data-es-w="${esc(w)}" aria-pressed="${gewaehlt.includes(w)}">${esc(n)}</button>`).join('')}</div></div>`;
+  }).join('');
+  box.innerHTML = `
+    ${ggLage('Wie haben Kurse um bestimmte Ereignisse reagiert, verglichen mit ganz normalen Tagen? Version wählen, Filter setzen, auswerten. Jede Version wird gegen eine Zufallsbasis aus gleich vielen zufälligen Tagen getestet.')}
+    ${d.studien.length ? `<div class="es-studien"><span class="sekundaer">Gespeicherte Studien</span>${studien}</div>` : ''}
+    <section class="karte es-aufbau">
+      <div class="es-zeile"><span class="es-label">Reihen</span>
+        <div class="es-reihen">${a.reihen.map((r) => `<span class="es-reihe">${esc(reiheName(r))}<button type="button" class="es-x" data-es-reihe-weg="${esc(r)}" aria-label="${esc(reiheName(r))} entfernen">×</button></span>`).join('')}
+        ${a.reihen.length < 4 ? `<select id="es-reihe-neu" aria-label="Reihe hinzufügen"><option value="">+ Reihe</option>${gruppen.map((g) => `<optgroup label="${esc(g)}">${alleReihen.filter((r) => r.gruppe === g && !a.reihen.includes(r.schluessel)).map((r) => `<option value="${esc(r.schluessel)}">${esc(r.name)}</option>`).join('')}</optgroup>`).join('')}</select>
+        <input id="es-ticker" type="text" placeholder="Ticker, z. B. NVDA" maxlength="20" aria-label="Beliebiger Ticker"><button type="button" class="knopf klein" id="es-ticker-ok">Hinzufügen</button>` : ''}</div></div>
+      <div class="es-zeile"><span class="es-label">Fenster</span>
+        ${ggKnoepfe('es-modus', [['tag', 'Handelstage'], ['minute', 'Minuten']], a.modus)}
+        <label class="es-zahl">von <input type="number" id="es-von" value="${a.von}" max="0" min="${a.modus === 'minute' ? -600 : -120}"></label>
+        <label class="es-zahl">bis <input type="number" id="es-bis" value="${a.bis}" min="1" max="${a.modus === 'minute' ? 600 : 120}"></label>
+        <span class="es-label">Kennzahlen bei</span>${ggKnoepfe('es-stufe', (a.modus === 'minute' ? [0, 5, 15, 60] : [0, 1, 5, 10]).filter((s) => s <= a.bis).map((s) => [String(s), `${a.modus === 'minute' ? '' : 'Tag '}${s > 0 ? '+' : ''}${s}${a.modus === 'minute' ? ' Min.' : ''}`]), String(a.stufe))}</div>
+      ${a.modus === 'minute' ? `<p class="klein sekundaer">${d.minuten?.zeilen ? `Eigene Minutendaten: ${gz0.format(d.minuten.zeilen)} Kurse von ${esZeitText(d.minuten.von)} bis ${esZeitText(d.minuten.bis)}. Ältere Events haben noch keine Minuten.` : 'Minutendaten werden ab jetzt jeden Abend gesammelt (die ersten ~30 Tage holt Vinter beim ersten Lauf nach). Bis dahin gibt es hier noch nichts auszuwerten.'} Zinsen in Minuten über die Anleihe-ETFs IEF und SHY (Kurs statt Rendite).</p>` : ''}
+      <div class="es-zeile es-versionen"><span class="es-label">Versionen</span>${versionen}
+        ${a.versionen.length < 4 ? '<button type="button" class="knopf klein" id="es-version-neu">+ Version</button>' : ''}</div>
+      <div class="es-filter">
+        <div class="es-zeile"><input type="text" id="es-version-name" value="${esc(v.name)}" maxlength="40" aria-label="Name der Version">
+          <label class="es-zahl">ab <input type="date" id="es-f-von" value="${esc(f.von ?? '')}"></label><label class="es-zahl">bis <input type="date" id="es-f-bis" value="${esc(f.bis ?? '')}"></label>
+          <label><input type="checkbox" id="es-f-geprueft" ${f.nur_geprueft ? 'checked' : ''}> ohne „bitte prüfen“</label>
+          <label><input type="checkbox" id="es-f-auto" ${f.ohne_auto ? 'checked' : ''}> ohne automatische Makro-Termine</label>
+          ${a.versionen.length > 1 ? '<button type="button" class="knopf klein gefahr" id="es-version-weg">Version entfernen</button>' : ''}</div>
+        ${chips}
+        <p class="klein sekundaer">Innerhalb einer Gruppe reicht ein Treffer (oder), zwischen den Gruppen müssen alle passen (und). Leere Gruppe = alles.</p>
+      </div>
+      <div class="es-zeile es-aktionen"><button type="button" class="knopf primaer" id="es-los">${es.laedt ? 'Wird gerechnet …' : 'Auswerten'}</button>
+        <button type="button" class="knopf" id="es-speichern">Als Studie speichern</button>
+        <label><input type="checkbox" id="es-einzel" ${es.einzel ? 'checked' : ''}> Einzelne Events als Linien</label></div>
+    </section>
+    <div id="es-ergebnis"></div>
+    <div id="es-events"></div>
+    <details class="karte es-methode"><summary>Methode, Quellen und Grenzen</summary>
+      <p><b>Tag 0</b> ist der erste Handelstag, an dem der Markt das Ereignis handeln konnte: bis 16 Uhr New Yorker Zeit an einem Handelstag derselbe Tag, danach oder am Wochenende der nächste. Gemessen wird ab dem Schluss davor, deshalb enthält Tag 0 die Reaktion. Negative Tage zeigen, was vorher lief.</p>
+      <p><b>Einheiten:</b> Kurse in Prozent, Renditen in Basispunkten (FRED, Tageswerte), VIX in Punkten. Kurse von Yahoo, bereinigt. Bei europäischen und asiatischen Indizes gilt dieselbe New Yorker Regel, Tag 0 kann dort also einen Tag später liegen.</p>
+      <p><b>Zufallsbasis:</b> ${gz0.format(d.ziehungen ?? 1000)} Mal werden gleich viele zufällige Tage aus derselben Reihe gezogen (ab zwei Jahre vor dem ersten Event). Das graue Band zeigt, wo deren Durchschnitt in 90 % der Fälle lag. Der p-Wert sagt, wie oft Zufall mindestens so weit vom Normalen entfernt war wie die Events: unter 0,05 gilt als auffällig.</p>
+      <p><b>Zwei Versionen:</b> Der Unterschied zu Version 1 wird mit einem Permutationstest geprüft (Etiketten 2.000-mal vertauscht).</p>
+      <p><b>Band um eine Version:</b> Bootstrap über die Events, 90 %. Bei wenigen Events ist es breit, und ein einzelner großer Tag bestimmt den Durchschnitt: Median daneben ansehen.</p>
+      <p><b>Viele Varianten:</b> Wer 20 Filterkombinationen ausprobiert, findet im Schnitt eine „auffällige“ rein zufällig. Vinter zählt, wie viele verschiedene Varianten du heute gerechnet hast.</p>
+      <p><b>Automatische Events:</b> CPI und Arbeitsmarktberichte (BLS-Archiv, 8:30 New York) und Fed-Entscheidungen (14:00) seit 2015; „überraschend“, wenn sich die 2-jährige Rendite am Tag um mindestens 5 Basispunkte bewegt hat. Marktlage: S&P 500 in den 20 Handelstagen davor, VIX am Vortag, Abstand zum Allzeithoch (Schwellen in event_kategorien.yaml).</p>
+      <p>Zeitlicher Zusammenhang ist kein Beweis für Ursache. Information, keine Vorhersage.</p>
+    </details>`;
+  esBinden();
+  esErgebnisZeichnen();
+  esEventsZeichnen();
+}
+
+function esBinden() {
+  const box = el('eventstudie-inhalt'), a = es.anfrage;
+  const neu = () => { esMerken(); esZeichnen(); };
+  box.querySelectorAll('[data-es-studie]').forEach((k) => k.addEventListener('click', () => {
+    const s = es.daten.studien.find((x) => x.id === k.dataset.esStudie);
+    if (!s) return;
+    es.anfrage = structuredClone(s.anfrage); es.offen = 0; esMerken(); esZeichnen(); esAuswerten();
+  }));
+  box.querySelectorAll('[data-es-studie-weg]').forEach((k) => k.addEventListener('click', async () => {
+    if (!confirm('Diese Studie löschen?')) return;
+    await esSenden(`/api/eventstudie/studie/${encodeURIComponent(k.dataset.esStudieWeg)}`, 'DELETE');
+    esLaden(true);
+  }));
+  box.querySelectorAll('[data-es-reihe-weg]').forEach((k) => k.addEventListener('click', () => { a.reihen = a.reihen.filter((r) => r !== k.dataset.esReiheWeg); neu(); }));
+  el('es-reihe-neu')?.addEventListener('change', (e) => { if (e.target.value) { a.reihen.push(e.target.value); neu(); } });
+  const ticker = () => { const t = el('es-ticker').value.trim().toUpperCase(); if (t && !a.reihen.includes(`t:${t}`)) { a.reihen.push(`t:${t}`); neu(); } };
+  el('es-ticker-ok')?.addEventListener('click', ticker);
+  el('es-ticker')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') ticker(); });
+  ggFilterKlick(box, 'es-modus', (w) => {
+    a.modus = w;
+    Object.assign(a, w === 'minute' ? { von: -30, bis: 120, stufe: 5 } : { von: -5, bis: 10, stufe: 1 });
+    es.ergebnis = null; neu();
+  });
+  ggFilterKlick(box, 'es-stufe', (w) => { a.stufe = Number(w); neu(); });
+  el('es-von').addEventListener('change', (e) => { a.von = Math.min(0, Number(e.target.value) || 0); neu(); });
+  el('es-bis').addEventListener('change', (e) => { a.bis = Math.max(1, Number(e.target.value) || 1); if (a.stufe > a.bis) a.stufe = a.bis; neu(); });
+  box.querySelectorAll('[data-es-version]').forEach((k) => k.addEventListener('click', () => { es.offen = Number(k.dataset.esVersion); esZeichnen(); }));
+  el('es-version-neu')?.addEventListener('click', () => { a.versionen.push({ name: `Version ${a.versionen.length + 1}`, filter: {} }); es.offen = a.versionen.length - 1; neu(); });
+  el('es-version-weg')?.addEventListener('click', () => { a.versionen.splice(es.offen, 1); es.offen = 0; neu(); });
+  const v = a.versionen[es.offen];
+  v.filter ??= {};
+  el('es-version-name').addEventListener('change', (e) => { v.name = e.target.value.trim() || `Version ${es.offen + 1}`; neu(); });
+  el('es-f-von').addEventListener('change', (e) => { v.filter.von = e.target.value || undefined; neu(); });
+  el('es-f-bis').addEventListener('change', (e) => { v.filter.bis = e.target.value || undefined; neu(); });
+  el('es-f-geprueft').addEventListener('change', (e) => { v.filter.nur_geprueft = e.target.checked; neu(); });
+  el('es-f-auto').addEventListener('change', (e) => { v.filter.ohne_auto = e.target.checked; neu(); });
+  box.querySelectorAll('[data-es-f]').forEach((k) => k.addEventListener('click', () => {
+    const key = k.dataset.esF, w = k.dataset.esW, liste = v.filter[key] ?? [];
+    v.filter[key] = liste.includes(w) ? liste.filter((x) => x !== w) : [...liste, w];
+    if (!v.filter[key].length) delete v.filter[key];
+    neu();
+  }));
+  el('es-los').addEventListener('click', esAuswerten);
+  el('es-einzel').addEventListener('change', (e) => { es.einzel = e.target.checked; esErgebnisZeichnen(); });
+  el('es-speichern').addEventListener('click', async () => {
+    const name = prompt('Name der Studie (z. B. „Zölle gegen 10J-Rendite“):');
+    if (!name) return;
+    const r = await esSenden('/api/eventstudie/studie', 'POST', { name, anfrage: es.anfrage });
+    if (r.fehler) alert(r.fehler); else esLaden(true);
+  });
+}
+
+async function esAuswerten() {
+  if (es.laedt) return;
+  es.laedt = true;
+  const knopf = el('es-los');
+  if (knopf) { knopf.disabled = true; knopf.textContent = 'Wird gerechnet …'; }
+  try { es.ergebnis = await esSenden('/api/eventstudie/analyse', 'POST', es.anfrage); } catch { es.ergebnis = { fehler: 'Die Auswertung ist fehlgeschlagen.' }; }
+  es.laedt = false;
+  if (knopf) { knopf.disabled = false; knopf.textContent = 'Auswerten'; }
+  esErgebnisZeichnen();
+  esEventsZeichnen();
+}
+
+// ---------- Ergebnis ----------
+function esErgebnisZeichnen() {
+  const box = el('es-ergebnis'), r = es.ergebnis;
+  if (!box) return;
+  if (!r) { box.innerHTML = ''; return; }
+  if (r.fehler) { box.innerHTML = ggFehler(r); return; }
+  const einheitTag = r.modus === 'minute' ? 'Min.' : 'Tag';
+  const stufeText = `${einheitTag} ${r.stufe > 0 ? '+' : ''}${r.stufe}${r.modus === 'minute' ? '' : ''}`;
+  const warnung = [
+    ...r.versionen.filter((v) => v.n < r.wenig).map((v) => `„${esc(v.name)}“ hat nur ${v.n} Events: Die Zahlen schwanken stark, ein einzelner Tag kann alles bestimmen.`),
+    r.viele_tests ? `Du hast heute ${r.tests_heute} verschiedene Varianten gerechnet. Bei so vielen Versuchen ist ein „auffälliges“ Ergebnis oft Zufall: Ergebnisse besser an neuen Events prüfen.` : '',
+  ].filter(Boolean);
+  box.innerHTML = `
+    <div class="es-n">${r.versionen.map((v, i) => `<div class="es-n-kachel ${ES_FARBEN[i]}${v.n < r.wenig ? ' es-wenig' : ''}"><i></i><span>${esc(v.name)}</span><b>${v.n}</b><small>Events${v.n < r.wenig ? ' · zu wenige' : ''}</small></div>`).join('')}
+      <div class="es-n-kachel es-zufall"><i></i><span>Zufällige Tage</span><b>${gz0.format(r.ziehungen)}</b><small>Ziehungen</small></div></div>
+    ${warnung.length ? `<p class="gg-lage es-warnung">${warnung.join('<br>')}</p>` : ''}
+    ${r.reihen.map((s, k) => esReiheKarte(s, k, r, stufeText)).join('')}`;
+  r.reihen.forEach((s, k) => { if (!s.fehler) { esChart(el(`es-chart-${k}`), s, r); esHisto(el(`es-histo-${k}`), s, r); } });
+  box.querySelectorAll('[data-es-zeige]').forEach((z) => z.addEventListener('click', () => { es.auswahl = z.dataset.esZeige; esAuswahlZeigen(); }));
+}
+
+function esFazit(s, r, stufeText) {
+  return s.versionen.map((v, i) => {
+    const k = v.kennzahlen, b = v.basis;
+    if (!v.n) return `<span class="${ES_FARBEN[i]}"><b>${esc(v.name)}</b>: keine Events mit Daten.</span>`;
+    const auffaellig = b?.p !== null && b?.p !== undefined && b.p < 0.05;
+    const gegen = v.gegen_erste ? ` Unterschied zu „${esc(s.versionen[0].name)}“ ${esDiff(v.gegen_erste.differenz, s.einheit)} (p ${esP(v.gegen_erste.p)}${v.gegen_erste.p !== null && v.gegen_erste.p < 0.05 ? ', auffällig' : ', nicht sicher'}).` : '';
+    return `<span class="${ES_FARBEN[i]}"><b>${esc(v.name)}</b> (n = ${v.n}): ${esc(s.name)} bis ${stufeText} im Schnitt <b class="${klasse(k.mittel)}">${esWert(k.mittel, s.einheit)}</b>, Median ${esWert(k.median, s.einheit)}, ${k.treffer === null ? '' : `${gz0.format(k.treffer)} % im Plus`}; zufällige Tage ${esWert(b?.mittel_stufe, s.einheit)}. ${b ? (auffaellig ? `<b>Auffällig anders als Zufall</b> (p ${esP(b.p)}).` : `Nicht vom Zufall zu unterscheiden (p ${esP(b.p)}).`) : ''}${gegen}</span>`;
+  }).join('<br>');
+}
+
+function esReiheKarte(s, k, r, stufeText) {
+  if (s.fehler) return `<section class="karte"><h2>${esc(s.name)}</h2>${ggFehler(s)}</section>`;
+  const zeilen = s.versionen.map((v, i) => {
+    const m = v.kennzahlen, b = v.basis;
+    return `<tr><td><span class="es-punkt ${ES_FARBEN[i]}"></span>${esc(v.name)}</td><td><b class="${v.n < r.wenig ? 'es-wenig' : ''}">${v.n}</b>${v.fehlend.length ? ` <small class="sekundaer">(${v.fehlend.length} ohne Daten)</small>` : ''}</td>
+      <td class="${klasse(m.mittel)}">${esWert(m.mittel, s.einheit)}</td><td class="${klasse(m.median)}">${esWert(m.median, s.einheit)}</td>
+      <td>${m.treffer === null ? '–' : `${gz0.format(m.treffer)} %`}</td><td>${m.streuung === null ? '–' : esWert(m.streuung, s.einheit).replace(/^[+−]/, '')}</td>
+      <td>${esWert(b?.mittel_stufe, s.einheit)}</td><td>${b?.treffer == null ? '–' : `${gz0.format(b.treffer)} %`}</td>
+      <td class="${b?.p != null && b.p < 0.05 ? 'es-sig' : ''}">${esP(b?.p)}</td>
+      <td>${v.gegen_erste ? `${esDiff(v.gegen_erste.differenz, s.einheit)} <small class="sekundaer">p ${esP(v.gegen_erste.p)}</small>` : '–'}</td></tr>`;
+  });
+  return ggKarte(`es-r-${k}`, s.name, [
+    ['Hauptgrafik', `Durchschnittlicher Verlauf je Version ab dem Schluss vor Tag 0 (${s.einheit_text}), mit 90-%-Band. Grau: Bereich, in dem der Durchschnitt gleich vieler zufälliger Tage lag. Senkrecht durchgezogen: Tag 0, gestrichelt: der Schritt für die Kennzahlen.`],
+    ['Verteilung', `Reaktion jedes einzelnen Events bis ${stufeText}. Zeigt, ob der Durchschnitt von einem einzigen Ausreißer kommt.`],
+    ['p-Wert', 'Anteil der Zufallsziehungen, die mindestens so extrem waren. Unter 0,05 = auffällig, darüber kann es Zufall sein.'],
+  ], `<p class="gg-lage es-fazit">${esFazit(s, r, stufeText)}</p>
+    <div class="es-chart" id="es-chart-${k}"></div>
+    <div class="es-unter"><div><h3 class="pg-unter">Verteilung bis ${stufeText}</h3><div class="es-histo" id="es-histo-${k}"></div></div></div>
+    ${ggTabelle(['Version', 'n', 'Ø', 'Median', 'im Plus', 'Streuung', 'Zufall Ø', 'Zufall im Plus', 'p gegen Zufall', 'gegen Version 1'], zeilen, 'es-tabelle')}`,
+  `Daten bis ${datumDe(s.stand.slice(0, 10))}`);
+}
+
+// Achsen-Schritte: 1, 2, 5 × 10^k
+function esTicks(lo, hi, anzahl = 5) {
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const roh = (hi - lo) / anzahl, p = 10 ** Math.floor(Math.log10(roh));
+  const schritt = [1, 2, 5, 10].map((x) => x * p).find((x) => x >= roh);
+  const aus = [];
+  for (let t = Math.floor(lo / schritt) * schritt; t <= hi + schritt / 2; t += schritt) aus.push(+t.toFixed(10));
+  return aus;
+}
+
+function esChart(feld, s, r) {
+  if (!feld) return;
+  const breite = feld.clientWidth || 600, hoehe = 300, rand = { l: 52, r: 12, o: 12, u: 28 };
+  const schritte = s.versionen[0]?.schritte ?? [];
+  if (!schritte.length) { feld.innerHTML = ''; return; }
+  const werte = [];
+  s.versionen.forEach((v) => { v.mittel.forEach((x) => x !== null && werte.push(x)); v.band.forEach(([a, b]) => { if (a !== null) werte.push(a, b); }); if (es.einzel) v.einzel.forEach((e) => e.werte.forEach((x) => x !== null && werte.push(x))); });
+  const basis = s.versionen.find((v) => v.basis)?.basis;
+  basis?.band.forEach(([a, b]) => { if (a !== null) werte.push(a, b); });
+  werte.push(0);
+  const ticks = esTicks(Math.min(...werte), Math.max(...werte));
+  const lo = ticks[0], hi = ticks.at(-1);
+  const x = (i) => rand.l + (i / Math.max(1, schritte.length - 1)) * (breite - rand.l - rand.r);
+  const y = (v) => rand.o + ((hi - v) / (hi - lo || 1)) * (hoehe - rand.o - rand.u);
+  const linie = (reihe) => reihe.map((v, i) => (v === null ? null : `${x(i).toFixed(1)} ${y(v).toFixed(1)}`)).reduce((acc, p) => { if (p === null) { acc.offen = false; return acc; } acc.d += `${acc.offen ? 'L' : 'M'}${p}`; acc.offen = true; return acc; }, { d: '', offen: false }).d;
+  const band = (b) => { const ok = b.map((p, i) => [p, i]).filter(([p]) => p[0] !== null); if (!ok.length) return ''; return `M${ok.map(([p, i]) => `${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join('L')}L${ok.reverse().map(([p, i]) => `${x(i).toFixed(1)} ${y(p[0]).toFixed(1)}`).join('L')}Z`; };
+  const i0 = schritte.indexOf(0), is = schritte.indexOf(r.stufe);
+  const einheit = (t) => (s.einheit === 'bp' ? gz0.format(t) : s.einheit === 'punkte' ? gz1.format(t) : `${gz1.format(t)} %`);
+  // Beschriftung nur so oft, dass mindestens 30 px dazwischen liegen (Handy)
+  const jede = Math.max(1, Math.ceil(30 / ((breite - rand.l - rand.r) / Math.max(1, schritte.length - 1))));
+  const xBeschr = schritte.map((st, i) => ({ st, i })).filter(({ st }) => st % jede === 0);
+  const einzel = es.einzel ? s.versionen.map((v, vi) => v.einzel.map((e) => `<path class="es-einzel ${ES_FARBEN[vi]}${es.auswahl === e.id ? ' gewaehlt' : ''}" d="${linie(e.werte)}" data-es-id="${esc(e.id)}"><title>${esc(r.events[e.id]?.titel ?? '')}</title></path>`).join('')).join('') : '';
+  feld.innerHTML = `<div class="es-chart-innen"><svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}">
+    ${ticks.map((t) => `<line class="${t === 0 ? 'lc-null' : 'lc-gitter'}" x1="${rand.l}" x2="${breite - rand.r}" y1="${y(t)}" y2="${y(t)}"/><text class="c-achse" x="${rand.l - 8}" y="${y(t) + 4}" text-anchor="end">${einheit(t)}</text>`).join('')}
+    ${xBeschr.map(({ st, i }) => `<text class="c-achse" x="${x(i)}" y="${hoehe - 8}" text-anchor="middle">${st > 0 ? '+' : ''}${st}</text>`).join('')}
+    ${i0 >= 0 ? `<line class="es-null" x1="${x(i0)}" x2="${x(i0)}" y1="${rand.o}" y2="${hoehe - rand.u}"/>` : ''}
+    ${is >= 0 && is !== i0 ? `<line class="es-stufe" x1="${x(is)}" x2="${x(is)}" y1="${rand.o}" y2="${hoehe - rand.u}"/>` : ''}
+    ${basis ? `<path class="es-basis-band" d="${band(basis.band)}"/><path class="es-basis" d="${linie(basis.mittel)}"/>` : ''}
+    ${einzel}
+    ${s.versionen.map((v, vi) => `<path class="es-band ${ES_FARBEN[vi]}" d="${band(v.band)}"/>`).join('')}
+    ${s.versionen.map((v, vi) => `<path class="es-linie ${ES_FARBEN[vi]}" d="${linie(v.mittel)}"/>`).join('')}
+    <line class="lc-zeiger" y1="${rand.o}" y2="${hoehe - rand.u}" visibility="hidden"/>
+    <rect class="es-fang" x="${rand.l}" y="${rand.o}" width="${breite - rand.l - rand.r}" height="${hoehe - rand.o - rand.u}" fill="transparent"${es.einzel ? ' pointer-events="none"' : ''}/>
+  </svg><div class="c-tip lc-tip" hidden></div></div>
+  <p class="lc-legende">${s.versionen.map((v, vi) => `<span class="${ES_FARBEN[vi]}"><i></i>${esc(v.name)} (n = ${v.n})</span>`).join('')}${basis ? '<span class="es-zufall"><i></i>Zufällige Tage (90 %)</span>' : ''}<span class="sekundaer">${r.modus === 'minute' ? 'Minuten' : 'Handelstage'} ab dem Event</span></p>`;
+  const svg = feld.querySelector('svg'), tip = feld.querySelector('.lc-tip'), zeiger = feld.querySelector('.lc-zeiger');
+  const zeigen = (cx) => {
+    const px = cx - svg.getBoundingClientRect().left;
+    const i = Math.max(0, Math.min(schritte.length - 1, Math.round(((px - rand.l) / (breite - rand.l - rand.r)) * (schritte.length - 1))));
+    zeiger.setAttribute('x1', x(i)); zeiger.setAttribute('x2', x(i)); zeiger.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<small>${r.modus === 'minute' ? 'Minute' : 'Tag'} ${schritte[i] > 0 ? '+' : ''}${schritte[i]}</small>${s.versionen.map((v, vi) => `<div class="${ES_FARBEN[vi]}"><span><i></i>${esc(v.name)}</span><span>${esWert(v.mittel[i], s.einheit)}</span></div>`).join('')}${basis ? `<div class="es-zufall"><span><i></i>Zufall</span><span>${esWert(basis.mittel[i], s.einheit)}</span></div>` : ''}`;
+    tip.hidden = false;
+    const platz = tip.offsetWidth + 12;
+    tip.style.left = `${x(i) + platz < breite ? x(i) + 12 : Math.max(0, x(i) - platz)}px`;
+  };
+  svg.addEventListener('pointermove', (e) => zeigen(e.clientX));
+  svg.addEventListener('pointerdown', (e) => zeigen(e.clientX));
+  svg.addEventListener('pointerleave', () => { tip.hidden = true; zeiger.setAttribute('visibility', 'hidden'); });
+  svg.querySelectorAll('.es-einzel').forEach((p) => p.addEventListener('click', () => { es.auswahl = p.dataset.esId; esAuswahlZeigen(); }));
+}
+
+function esHisto(feld, s, r) {
+  if (!feld) return;
+  const alle = s.versionen.flatMap((v) => v.werte.filter((x) => x !== null));
+  if (!alle.length) { feld.innerHTML = '<p class="sekundaer">Keine Werte.</p>'; return; }
+  const breite = feld.clientWidth || 500, hoehe = 150, rand = { l: 8, r: 8, o: 8, u: 24 };
+  let lo = Math.min(0, ...alle), hi = Math.max(0, ...alle);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const n = Math.min(16, Math.max(6, Math.round(Math.sqrt(alle.length) * 2)));
+  const w = (hi - lo) / n;
+  const faecher = s.versionen.map((v) => { const z = Array(n).fill(0); v.werte.forEach((x) => { if (x !== null) z[Math.min(n - 1, Math.floor((x - lo) / w))]++; }); return z; });
+  const maxZ = Math.max(1, ...faecher.flat());
+  const x = (v) => rand.l + ((v - lo) / (hi - lo)) * (breite - rand.l - rand.r);
+  const bw = (breite - rand.l - rand.r) / n / s.versionen.length;
+  const basis = s.versionen.find((v) => v.basis)?.basis;
+  const einheit = (t) => esWert(t, s.einheit, gz1);
+  feld.innerHTML = `<svg width="${breite}" height="${hoehe}" viewBox="0 0 ${breite} ${hoehe}">
+    ${faecher.map((z, vi) => z.map((c, j) => (c ? `<rect class="es-saeule ${ES_FARBEN[vi]}" x="${x(lo + j * w) + vi * bw + 1}" y="${rand.o + (1 - c / maxZ) * (hoehe - rand.o - rand.u)}" width="${Math.max(1, bw - 2)}" height="${(c / maxZ) * (hoehe - rand.o - rand.u)}"><title>${einheit(lo + j * w)} bis ${einheit(lo + (j + 1) * w)}: ${c} Events (${esc(s.versionen[vi].name)})</title></rect>` : '')).join('')).join('')}
+    <line class="es-null" x1="${x(0)}" x2="${x(0)}" y1="${rand.o}" y2="${hoehe - rand.u}"/>
+    ${basis?.mittel_stufe != null ? `<line class="es-stufe" x1="${x(basis.mittel_stufe)}" x2="${x(basis.mittel_stufe)}" y1="${rand.o}" y2="${hoehe - rand.u}"><title>Zufall Ø</title></line>` : ''}
+    <text class="c-achse" x="${rand.l}" y="${hoehe - 6}">${einheit(lo)}</text><text class="c-achse" x="${breite - rand.r}" y="${hoehe - 6}" text-anchor="end">${einheit(hi)}</text>
+    <text class="c-achse" x="${x(0)}" y="${hoehe - 6}" text-anchor="middle">0</text></svg>`;
+}
+
+// ---------- Events: Tabelle des Ergebnisses, Vorschläge, eigene Events ----------
+function esAuswahlZeigen() {
+  const e = es.ergebnis?.events?.[es.auswahl] ?? es.daten.events.find((x) => x.id === es.auswahl);
+  const box = el('es-auswahl');
+  if (!e || !box) return;
+  const eigen = es.daten.events.find((x) => x.id === es.auswahl && x.herkunft !== 'automatisch');
+  box.hidden = false;
+  box.innerHTML = `<b>${esc(e.titel)}</b> <span class="sekundaer">${esZeitText(e.zeit)} · ${esc(e.zeitpunkt ?? '')} · ${esc(esKatName(e.kategorie))}${e.untertyp ? ` / ${esc(esUnterName(e.kategorie, e.untertyp))}` : ''}</span>
+    <p class="klein">${[e.merkmale?.richtung, ...(e.merkmale?.region ?? []), ...(e.merkmale?.akteur ?? []), e.merkmale?.ueberraschung, e.merkmale?.staerke, e.merkmale?.status, e.lage?.trend, e.lage?.vix, e.lage?.hoch].filter(Boolean).map((t) => `<span class="es-tag">${esc(t)}</span>`).join('')}
+    ${(e.tags ?? []).map((t) => `<span class="es-tag gold">${esc(t)}</span>`).join('')}</p>
+    ${e.notiz ? `<p class="klein sekundaer">${esc(e.notiz)}</p>` : ''}${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">Quelle öffnen</a> ` : ''}
+    ${eigen ? `<button type="button" class="knopf klein" data-es-bearbeiten="${esc(e.id)}">Bearbeiten</button>` : ''}`;
+  box.querySelector('[data-es-bearbeiten]')?.addEventListener('click', () => esFormOeffnen(eigen));
+  box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function esEventsZeichnen() {
+  const box = el('es-events'), d = es.daten, r = es.ergebnis;
+  if (!box || !d || d.fehler) return;
+  // Tabelle der Events im Ergebnis mit der Reaktion je Reihe
+  let tabelle = '';
+  if (r && !r.fehler) {
+    const reihen = r.reihen.filter((s) => !s.fehler);
+    const je = new Map();
+    reihen.forEach((s, k) => s.versionen.forEach((v, vi) => v.einzel.forEach((e) => {
+      const z = je.get(e.id) ?? { id: e.id, versionen: new Set(), werte: {} };
+      z.versionen.add(vi);
+      z.werte[k] = e.werte[v.schritte.indexOf(r.stufe)];
+      je.set(e.id, z);
+    })));
+    const zeilen = [...je.values()].map((z) => ({ ...z, e: r.events[z.id] })).filter((z) => z.e);
+    const { spalte, ab } = es.sort;
+    zeilen.sort((a, b) => {
+      const wa = spalte === 'zeit' ? a.e.zeit : spalte === 'titel' ? a.e.titel : a.werte[spalte] ?? -Infinity;
+      const wb = spalte === 'zeit' ? b.e.zeit : spalte === 'titel' ? b.e.titel : b.werte[spalte] ?? -Infinity;
+      return (wa > wb ? 1 : wa < wb ? -1 : 0) * (ab ? 1 : -1);
+    });
+    const kopf = [['zeit', 'Zeit'], ['titel', 'Event'], ...reihen.map((s, k) => [String(k), `${esc(s.name)} bis ${r.modus === 'minute' ? 'Min.' : 'Tag'} ${r.stufe > 0 ? '+' : ''}${r.stufe}`])]
+      .map(([k, n]) => `<button type="button" class="es-sort" data-es-sort="${k}">${n}${es.sort.spalte === k ? (es.sort.ab ? ' ↑' : ' ↓') : ''}</button>`);
+    tabelle = ggKarte('es-tab', `Alle Events im Ergebnis (${zeilen.length})`, [['Lesart', 'Klick auf eine Zeile zeigt das Event. Die Punkte zeigen, zu welcher Version es gehört (ein Event kann in mehreren sein). Spaltenkopf anklicken sortiert.']],
+      `<div class="es-auswahl" id="es-auswahl" hidden></div>${ggTabelle([...kopf.slice(0, 2), 'Merkmale', ...kopf.slice(2)], zeilen.map((z) => `<tr class="es-zeile-klick${es.auswahl === z.id ? ' gewaehlt' : ''}" data-es-zeige="${esc(z.id)}">
+        <td>${esZeitText(z.e.zeit)}<br><small class="sekundaer">${esc(z.e.zeitpunkt ?? '')}</small></td>
+        <td>${[...z.versionen].map((vi) => `<span class="es-punkt ${ES_FARBEN[vi]}"></span>`).join('')}${esc(z.e.titel)}${z.e.pruefen ? ' <span class="es-tag gold">bitte prüfen</span>' : ''}</td>
+        <td><small>${esc(z.e.merkmale?.richtung ?? '')}${z.e.lage?.trend ? ` · ${esc(z.e.lage.trend)}` : ''}${z.e.lage?.vix ? ` · ${esc(z.e.lage.vix)}` : ''}</small></td>
+        ${reihen.map((s, k) => `<td class="${klasse(z.werte[k])}">${esWert(z.werte[k], s.einheit)}</td>`).join('')}</tr>`), 'es-tabelle')}`);
+  }
+  // Vorschläge aus dem Newsfeed
+  const vs = es.vorschlaege ?? [];
+  const vorschlaege = ggKarte('es-vorschlaege', `Vorschläge aus dem Newsfeed${vs.length ? ` (${vs.length})` : ''}`, [
+    ['Woher', 'Wichtige Geschichten der letzten 7 Tage (Score ab 45) mit einem Ereignistyp, der zu einer Kategorie passt. Kategorie, Untertyp und Richtung sind nach Stichwörtern vorgeschlagen: kurz prüfen, dann übernehmen, anpassen oder verwerfen.'],
+  ], vs.length ? `<div class="es-vorschlag-liste">${vs.slice(0, 15).map((v, i) => `<div class="es-vorschlag">
+      <div><b>${esc(v.titel)}</b><br><small class="sekundaer">${esZeitText(v.zeit)} · Score ${gz0.format(v.score)} · ${esc(v.quellen.join(', '))}</small><br>
+      <span class="es-tag">${esc(esKatName(v.kategorie))}${v.untertyp ? ` / ${esc(esUnterName(v.kategorie, v.untertyp))}` : ''}</span><span class="es-tag">${esc(v.merkmale.richtung)}</span><span class="es-tag">${esc(v.merkmale.status)}</span>${v.merkmale.region.slice(0, 3).map((x) => `<span class="es-tag">${esc(x)}</span>`).join('')}</div>
+      <div class="es-vorschlag-knoepfe"><button type="button" class="knopf klein primaer" data-es-vs="ok" data-i="${i}">Übernehmen</button><button type="button" class="knopf klein" data-es-vs="anpassen" data-i="${i}">Anpassen</button><button type="button" class="knopf klein" data-es-vs="weg" data-i="${i}">Verwerfen</button></div></div>`).join('')}</div>`
+    : '<p class="sekundaer">Gerade keine neuen Vorschläge.</p>');
+  // Eigene Events
+  const eigene = d.events.filter((e) => e.herkunft !== 'automatisch' && (!es.suche || `${e.titel} ${e.kategorie} ${(e.tags ?? []).join(' ')}`.toLowerCase().includes(es.suche.toLowerCase()))).slice().reverse();
+  const pruefen = d.events.filter((e) => e.pruefen).length;
+  const verwaltung = ggKarte('es-verwaltung', `Deine Events (${d.events.length - d.auto} eigene, ${d.auto} automatische)`, [
+    ['Eintragen', 'Zeit mit Zeitzone eingeben (New York, Berlin oder UTC). Die Zeitzone entscheidet, welcher Handelstag Tag 0 ist.'],
+    ['CSV', 'Kopfzeile mit den Spalten zeit, titel, kategorie, untertyp, richtung, region, akteur, ueberraschung, staerke, status, tags, link, notiz. Trennzeichen Komma oder Semikolon, mehrere Werte in einer Zelle mit | trennen. Zeit wie 2025-04-02T16:00:00-04:00; ohne Zeitzone gilt New York. Kategorie als Schlüssel (handel) oder Name (Handel).'],
+    ['Startdatensatz', 'Die Zoll-Ereignisse 2025 sind aus dem Gedächtnis eingetragen und stehen auf „bitte prüfen“. Datum und Uhrzeit mit einer Quelle abgleichen und dann auf „geprüft“ setzen.'],
+  ], `${pruefen ? `<p class="gg-lage">${pruefen} Events stehen noch auf „bitte prüfen“.</p>` : ''}
+    <div class="es-zeile"><button type="button" class="knopf primaer" id="es-neu">Neues Event</button>
+      <label class="knopf">CSV importieren<input type="file" id="es-csv" accept=".csv,text/csv" hidden></label>
+      <button type="button" class="knopf" id="es-kat-neu">Eigene Kategorie</button>
+      <input type="search" id="es-suche" placeholder="Suchen" value="${esc(es.suche)}" aria-label="Events durchsuchen"></div>
+    ${es.meldung ? `<p class="klein">${esc(es.meldung)}</p>` : ''}
+    <div id="es-form"></div>
+    ${ggTabelle(['Zeit', 'Event', 'Kategorie', 'Richtung', ''], eigene.slice(0, 200).map((e) => `<tr><td>${esZeitText(e.zeit)}</td>
+      <td>${esc(e.titel)}${e.pruefen ? ' <span class="es-tag gold">bitte prüfen</span>' : ''}<br><small class="sekundaer">${esc(e.herkunft)}</small></td>
+      <td><small>${esc(esKatName(e.kategorie))}${e.untertyp ? ` / ${esc(esUnterName(e.kategorie, e.untertyp))}` : ''}</small></td><td><small>${esc(e.merkmale?.richtung ?? '')}</small></td>
+      <td class="es-knoepfe">${e.pruefen ? `<button type="button" class="knopf klein" data-es-geprueft="${esc(e.id)}">Geprüft</button>` : ''}<button type="button" class="knopf klein" data-es-edit="${esc(e.id)}">Bearbeiten</button><button type="button" class="knopf klein gefahr" data-es-weg="${esc(e.id)}">Löschen</button></td></tr>`), 'es-tabelle')}`);
+  box.innerHTML = tabelle + vorschlaege + verwaltung;
+  box.querySelectorAll('[data-es-sort]').forEach((k) => k.addEventListener('click', () => { const s = k.dataset.esSort; es.sort = { spalte: s, ab: es.sort.spalte === s ? !es.sort.ab : s === 'zeit' }; esEventsZeichnen(); }));
+  box.querySelectorAll('[data-es-zeige]').forEach((z) => z.addEventListener('click', () => { es.auswahl = z.dataset.esZeige; esAuswahlZeigen(); if (es.einzel) esErgebnisZeichnen(); }));
+  box.querySelectorAll('[data-es-vs]').forEach((k) => k.addEventListener('click', async () => {
+    const v = vs[Number(k.dataset.i)];
+    const ev = { zeit: v.zeit, titel: v.titel, kategorie: v.kategorie, untertyp: v.untertyp, merkmale: v.merkmale, tags: v.tags, link: v.link };
+    if (k.dataset.esVs === 'anpassen') { esFormOeffnen({ ...ev, story: v.story }); return; }
+    const r2 = await esSenden(`/api/eventstudie/vorschlaege/${v.story}`, 'POST', { event: k.dataset.esVs === 'ok' ? ev : null });
+    if (r2.fehler) { alert(r2.fehler); return; }
+    es.vorschlaege = vs.filter((x) => x !== v);
+    if (k.dataset.esVs === 'ok') await esLaden(true); else esEventsZeichnen();
+  }));
+  el('es-neu').addEventListener('click', () => esFormOeffnen(null));
+  el('es-suche').addEventListener('input', (e) => { es.suche = e.target.value; clearTimeout(es.suchUhr); es.suchUhr = setTimeout(() => { esEventsZeichnen(); el('es-suche')?.focus(); }, 300); });
+  el('es-csv').addEventListener('change', async (e) => {
+    const datei = e.target.files[0]; if (!datei) return;
+    const r2 = await esSenden('/api/eventstudie/csv', 'POST', await datei.text(), true);
+    es.meldung = r2.fehler && !Array.isArray(r2.fehler) ? r2.fehler : `${r2.neu} Events importiert.${r2.fehler?.length ? ` Nicht gelesen: ${r2.fehler.join(' · ')}` : ''}`;
+    await esLaden(true);
+  });
+  el('es-kat-neu').addEventListener('click', async () => {
+    const name = prompt('Name der neuen Kategorie:'); if (!name) return;
+    const unter = prompt('Untertypen, mit Komma getrennt (optional):') ?? '';
+    const r2 = await esSenden('/api/eventstudie/kategorie', 'POST', { name, untertypen: unter.split(',').map((x) => x.trim()).filter(Boolean) });
+    if (r2.fehler) alert(r2.fehler); else esLaden(true);
+  });
+  box.querySelectorAll('[data-es-edit]').forEach((k) => k.addEventListener('click', () => esFormOeffnen(d.events.find((e) => e.id === k.dataset.esEdit))));
+  box.querySelectorAll('[data-es-weg]').forEach((k) => k.addEventListener('click', async () => {
+    if (!confirm('Dieses Event löschen?')) return;
+    await esSenden(`/api/eventstudie/event/${encodeURIComponent(k.dataset.esWeg)}`, 'DELETE');
+    esLaden(true);
+  }));
+  box.querySelectorAll('[data-es-geprueft]').forEach((k) => k.addEventListener('click', async () => {
+    const e = d.events.find((x) => x.id === k.dataset.esGeprueft);
+    const r2 = await esSenden('/api/eventstudie/event', 'PUT', { ...e, pruefen: false });
+    if (r2.fehler) alert(r2.fehler); else esLaden(true);
+  }));
+  if (es.form) esFormZeichnen();
+  if (es.auswahl) esAuswahlZeigen();
+}
+
+function esFormOeffnen(e) { es.form = e ? structuredClone(e) : { neu: true, merkmale: {} }; esFormZeichnen(); el('es-form')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+function esFormZeichnen() {
+  const box = el('es-form'), f = es.form, d = es.daten;
+  if (!box) return;
+  if (!f) { box.innerHTML = ''; return; }
+  const m = f.merkmale ?? {}, mk = d.merkmale ?? {};
+  const kat = f.kategorie ?? Object.keys(d.kategorien)[0];
+  const auswahl = (id, liste, wert, leer = true) => `<select id="${id}">${leer ? '<option value="">–</option>' : ''}${liste.map(([w, n]) => `<option value="${esc(w)}" ${w === wert ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  box.innerHTML = `<div class="es-form karte">
+    <h3>${f.id ? 'Event bearbeiten' : f.story ? 'Vorschlag anpassen' : 'Neues Event'}</h3>
+    <div class="es-form-raster">
+      <label>Zeitpunkt<input type="datetime-local" id="esf-zeit" value="${f.zeit ? esNy(f.zeit) : ''}" required></label>
+      <label>Zeitzone${auswahl('esf-zone', [['America/New_York', 'New York'], ['Europe/Berlin', 'Berlin'], ['UTC', 'UTC']], 'America/New_York', false)}</label>
+      <label class="breit">Titel<input type="text" id="esf-titel" value="${esc(f.titel ?? '')}" maxlength="200"></label>
+      <label>Kategorie${auswahl('esf-kat', Object.entries(d.kategorien).map(([k, v]) => [k, v.name]), kat, false)}</label>
+      <label>Untertyp${auswahl('esf-unter', Object.entries(d.kategorien[kat]?.untertypen ?? {}), f.untertyp)}</label>
+      <label>Richtung${auswahl('esf-richtung', (mk.richtung ?? []).map((x) => [x, x]), m.richtung)}</label>
+      <label>Überraschung${auswahl('esf-ueb', (mk.ueberraschung ?? []).map((x) => [x, x]), m.ueberraschung)}</label>
+      <label>Stärke${auswahl('esf-staerke', (mk.staerke ?? []).map((x) => [x, x]), m.staerke)}</label>
+      <label>Status${auswahl('esf-status', (mk.status ?? []).map((x) => [x, x]), m.status)}</label>
+      <label>Region <small>(Komma)</small><input type="text" id="esf-region" value="${esc((m.region ?? []).join(', '))}" list="esf-region-liste"></label>
+      <label>Akteur <small>(Komma)</small><input type="text" id="esf-akteur" value="${esc((m.akteur ?? []).join(', '))}"></label>
+      <label>Tags <small>(Komma)</small><input type="text" id="esf-tags" value="${esc((f.tags ?? []).join(', '))}"></label>
+      <label class="breit">Link<input type="url" id="esf-link" value="${esc(f.link ?? '')}"></label>
+      <label class="breit">Notiz<textarea id="esf-notiz" rows="2" maxlength="1000">${esc(f.notiz ?? '')}</textarea></label>
+      <label><input type="checkbox" id="esf-pruefen" ${f.pruefen ? 'checked' : ''}> bitte prüfen</label>
+    </div>
+    <datalist id="esf-region-liste">${(mk.region ?? []).map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
+    <div class="es-zeile"><button type="button" class="knopf primaer" id="esf-ok">Speichern</button><button type="button" class="knopf" id="esf-ab">Abbrechen</button><span id="esf-meldung" class="klein"></span></div></div>`;
+  const liste = (id) => el(id).value.split(',').map((x) => x.trim()).filter(Boolean);
+  el('esf-kat').addEventListener('change', (e) => { es.form = { ...esFormLesen(), kategorie: e.target.value, untertyp: null }; esFormZeichnen(); });
+  function esFormLesen() {
+    return { ...f, zeit: el('esf-zeit').value, zone: el('esf-zone').value, titel: el('esf-titel').value, kategorie: el('esf-kat').value, untertyp: el('esf-unter').value || null,
+      merkmale: { richtung: el('esf-richtung').value || null, ueberraschung: el('esf-ueb').value || null, staerke: el('esf-staerke').value || null, status: el('esf-status').value || null, region: liste('esf-region'), akteur: liste('esf-akteur') },
+      tags: liste('esf-tags'), link: el('esf-link').value, notiz: el('esf-notiz').value, pruefen: el('esf-pruefen').checked };
+  }
+  el('esf-ab').addEventListener('click', () => { es.form = null; esFormZeichnen(); });
+  el('esf-ok').addEventListener('click', async () => {
+    const daten = esFormLesen();
+    if (!daten.zeit) { el('esf-meldung').textContent = 'Bitte einen Zeitpunkt eingeben.'; return; }
+    const { neu, story, ...rest } = daten;
+    const r2 = story ? await esSenden(`/api/eventstudie/vorschlaege/${story}`, 'POST', { event: rest }) : await esSenden('/api/eventstudie/event', f.id ? 'PUT' : 'POST', rest);
+    if (r2.fehler) { el('esf-meldung').textContent = r2.fehler; return; }
+    if (story) es.vorschlaege = (es.vorschlaege ?? []).filter((x) => x.story !== story);
+    es.form = null;
+    await esLaden(true);
+  });
+}
+window.addEventListener('resize', () => { if (es.ergebnis && !el('seite-eventstudie')?.hidden) { clearTimeout(es.groesse); es.groesse = setTimeout(esErgebnisZeichnen, 200); } });
+
 // ---- Absicherungs-Rechner (Roadmap Q8): app/nutzer/absicherung.py ----
 const ab = { ziel: 'depot', anteil: 50, index: 'ndx', tage: 90, gebuehr: 1 };
 let abDaten = null;
@@ -13078,7 +13602,7 @@ const LWC = window.LightweightCharts;
 const TV_INTERVALLE = [['15m', '15 Min.'], ['1h', '1 Std.'], ['1d', '1 Tag'], ['1wk', '1 Woche'], ['1mo', '1 Monat']];
 const TV_ARTEN = [['kerzen', 'Kerzen'], ['hohl', 'Hohle Kerzen'], ['heikin', 'Heikin-Ashi'], ['balken', 'Balken (OHLC)'], ['linie', 'Linie'], ['flaeche', 'Fläche']];
 const TV_IND = [['volumen', 'Volumen'], ['sma20', 'SMA 20'], ['sma50', 'SMA 50'], ['sma200', 'SMA 200'], ['ema9', 'EMA 9'], ['ema21', 'EMA 21'], ['bb', 'Bollinger-Bänder (20, 2)'], ['vwap', 'VWAP'], ['rsi', 'RSI (14)'], ['macd', 'MACD (12, 26, 9)'], ['atr', 'ATR (14)']];
-const TV_UEBER = [['meine', 'Einstand und Exit-Level'], ['avwap', 'VWAP ab erstem Kauf'], ['zonen', 'Zonen (Unterstützung/Widerstand)'], ['referenzen', 'Referenzlevel'], ['swings', 'Swing-Punkte'], ['alerts', 'Preis-Alerts'], ['trades', 'Eigene Käufe und Verkäufe'], ['earnings', 'Quartalszahlen (E unten im Chart)'], ['zeichnungen', 'Eigene Zeichnungen']];
+const TV_UEBER = [['meine', 'Einstand und Exit-Level'], ['avwap', 'VWAP ab erstem Kauf'], ['zonen', 'Zonen (Unterstützung/Widerstand)'], ['referenzen', 'Referenzlevel'], ['swings', 'Swing-Punkte'], ['alerts', 'Preis-Alerts'], ['trades', 'Eigene Käufe und Verkäufe'], ['earnings', 'Quartalszahlen (E unten im Chart)'], ['events', 'Eigene Events (Event Study)'], ['zeichnungen', 'Eigene Zeichnungen']];
 const TV_ZEITRAUM = [['1M', '1 M.'], ['3M', '3 M.'], ['6M', '6 M.'], ['YTD', 'YTD'], ['1J', '1 J.'], ['5J', '5 J.'], ['alles', 'Alles']];
 const TV_WERKZEUGE = [
   ['cursor', 'Fadenkreuz (Esc)', '<path d="M12 3v18M3 12h18"/>'],
@@ -13095,7 +13619,7 @@ const TV_WERKZEUGE = [
 const tv = {
   chart: null, haupt: null, serien: [], intervall: '1d', art: 'kerzen', skala: 'normal', magnet: false, vollbild: false,
   ind: { volumen: true, sma20: false, sma50: true, sma200: true, ema9: false, ema21: false, bb: false, vwap: false, rsi: false, macd: false, atr: false },
-  ueber: { meine: true, avwap: false, zonen: true, referenzen: false, swings: false, alerts: true, trades: true, earnings: true, zeichnungen: true },
+  ueber: { meine: true, avwap: false, zonen: true, referenzen: false, swings: false, alerts: true, trades: true, earnings: true, events: true, zeichnungen: true },
   vergleich: [], daten: null, ticker: null, zeiten: [], werkzeug: 'cursor', entwurf: null, messung: null, zeichnungen: [], linien: [], signatur: '', schleife: 0,
   auswahl: -1, version: 0, zug: null, ziehen: null, bereich: null, shiftBereich: false,
   anker: null, ankerWahl: false, roh: [], // Vergleich: Startpunkt (Zeit in Sekunden, null = erste sichtbare Kerze) und Rohdaten der Kursfenster-Serien
@@ -13365,6 +13889,9 @@ function tvLegende(p) {
   feld.innerHTML = `<div class="tv-l-kopf"><b>${esc(caDaten.ticker)}</b><span>${esc(TV_INTERVALLE.find((x) => x[0] === tv.intervall)[1])}</span><span>${zeit}</span>${tvIntraday() && d.datum.length ? `<span class="tv-l-ab">Kurse ab ${lokal(d.datum[0]).toLocaleDateString('de-DE')} (freie Quelle), ältere und Earnings: ${tv.intervall === '15m' ? '1 Std. oder ' : ''}1 Tag</span>` : ''}</div>
     <div class="tv-l-ohlc">O <b>${caP(d.o[i])}</b> H <b>${caP(d.h[i])}</b> T <b>${caP(d.l[i])}</b> S <b>${caP(d.c[i])}</b> <em class="${klasse(ver)}">${ggVz(ver, gz2)} %</em>${tv.vergleich.length ? (() => { const v0 = (d.c[i] / d.c[tvAnkerIndex()] - 1) * 100; return ` <em class="${klasse(v0)}">seit Start ${ggVz(v0, gz1)} %</em>`; })() : ''}</div>
     <div class="tv-l-werte">${werte}</div>${tv.ueber.trades && tv.tradeInfo?.has(i) ? `<div class="tv-l-trades">${tv.tradeInfo.get(i).map((t) => `<span class="${t.typ}">${t.typ === 'kauf' ? 'Kauf' : 'Verkauf'} ${esc(t.zeit.slice(8, 10))}.${esc(t.zeit.slice(5, 7))}. ${esc(t.zeit.slice(11))} · ${String(+t.stueck.toFixed(4)).replace('.', ',')} Stück · ${euro.format(t.betrag)}${t.preis_eur ? ` · je ${euro.format(t.preis_eur)}` : ''}</span>`).join('')}</div>` : ''}`;
+  // Events aus der Event Study an dieser Kerze
+  const ev = tvEventsBeiIndex(i);
+  if (ev.length) feld.insertAdjacentHTML('beforeend', `<div class="tv-l-earnings">${ev.map((x) => `Event ${ggDatum(x.zeit.slice(0, 10))}: ${esc(x.titel)}${x.richtung ? ` <small>(${esc(x.richtung)})</small>` : ''}`).join('<br>')}</div>`);
   // Quartalszahlen an dieser Kerze
   const e = tvEarningsBeiIndex(i);
   if (e) {
@@ -13416,6 +13943,44 @@ function tvEarningsBeiIndex(i) {
   }
   const tag = new Date(tv.daten.sek[i] * 1000).toISOString().slice(0, 10);
   return liste.find((e) => e.datum === tag) ?? null;
+}
+// ---- Eigene Events (Event Study) als kleine Raute oben im Chart, Details in der Legende ----
+function tvEventsDaten() {
+  if (tv.ueber.events === false) return null;
+  if (tv.events) return tv.events;
+  if (!tv.eventsLaedt) {
+    tv.eventsLaedt = true;
+    api('/api/eventstudie/marker').then((d) => { tv.events = d.marker ?? []; tvSignaturZuruecksetzen(); tv.version++; }).catch(() => { tv.events = []; });
+  }
+  return null;
+}
+// Sekunden wie die Intraday-Kerzen: deutsche Uhrzeit "als UTC"
+function tvBerlinSek(iso) {
+  const teile = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(iso)).filter((p) => p.type !== 'literal').map((p) => Number(p.value));
+  return Date.UTC(teile[0], teile[1] - 1, teile[2], teile[3], teile[4]) / 1000;
+}
+function tvEventsBeiIndex(i) {
+  const liste = tvEventsDaten();
+  if (!liste?.length || !tv.daten) return [];
+  const von = tv.daten.sek[i], bis = tv.daten.sek[i + 1] ?? Infinity;
+  if (tv.intervall === '1d') return liste.filter((e) => e.tag0 === tv.daten.zeit[i]);
+  if (!tvIntraday()) return liste.filter((e) => { const s = tvEarningsSek(e.tag0); return s >= von && s < bis; });
+  return liste.filter((e) => { const s = tvBerlinSek(e.zeit); return s >= von && s < bis; });
+}
+function tvEventsMalen(t, breite) {
+  const liste = tvEventsDaten();
+  if (!liste?.length || tv.vergleich.length || !tv.daten) return;
+  const sicht = tv.chart.timeScale().getVisibleLogicalRange();
+  const n = tv.daten.c.length;
+  for (let i = Math.max(0, Math.floor(sicht?.from ?? 0)); i <= Math.min(n - 1, Math.ceil(sicht?.to ?? n - 1)); i++) {
+    const ev = tvEventsBeiIndex(i);
+    if (!ev.length) continue;
+    const x = tvXLogisch(i);
+    if (x === null || x < -10 || x > breite + 10) continue;
+    const art = ev.some((e) => e.richtung === 'Eskalation') ? 'esk' : ev.some((e) => e.richtung === 'Deeskalation') ? 'deesk' : '';
+    t.push(`<g class="tv-ev ${art}"><line x1="${x}" x2="${x}" y1="12" y2="40"/><path d="M${x} 3l5 5-5 5-5-5z"/></g>`);
+  }
 }
 function tvEarningsMalen(t, breite, hoehe) {
   const liste = tvEarningsDaten();
@@ -13526,6 +14091,7 @@ function tvMale() {
   t.push(`<defs><clipPath id="tv-clip"><rect x="0" y="0" width="${breite}" height="${hoehe}"/></clipPath></defs><g clip-path="url(#tv-clip)">`);
   const belegt = [];
   tvEarningsMalen(t, breite, hoehe);
+  tvEventsMalen(t, breite);
   if (tv.ueber.alerts && !tv.vergleich.length) {
     for (const a of caAlerts.filter((x) => x.ticker === caDaten?.ticker)) {
       const y = tvY(a.preis);
@@ -16504,7 +17070,7 @@ const GRUPPEN = [
   { titel: 'Kalender', teile: [['kalender', 'Termine'], ['earnings-sheet', 'Cheat Sheet'], ['zahlen', 'Zahlen-Auswertung'], ['earnings-moves', 'Earnings-Moves'], ['events', 'Event-Bewegung'], ['drift', 'Post-Earnings-Drift'], ['makrodaten', 'Makro-Daten']] },
   { titel: 'Risiko', teile: [['risiko', 'Kennzahlen'], ['faktoren', 'Faktoren'], ['positionsgroesse', 'Positionsgröße'], ['absicherung', 'Absicherung'], ['zertifikat', 'Faktor-Zertifikat']] },
   { titel: 'Volatilität & Gamma', teile: [['vola', 'Volatilität'], ['gamma', 'Gamma-Exposure']] },
-  { titel: 'Szenarien', teile: [['stresstest', 'Stresstest'], ['makro', 'Zins, Öl, Dollar'], ['makrotage', 'Makro-Tage'], ['backtest', 'Backtest-Labor'], ['montecarlo', 'Monte-Carlo']] },
+  { titel: 'Szenarien', teile: [['stresstest', 'Stresstest'], ['makro', 'Zins, Öl, Dollar'], ['makrotage', 'Makro-Tage'], ['eventstudie', 'Event Study'], ['backtest', 'Backtest-Labor'], ['montecarlo', 'Monte-Carlo']] },
   { titel: 'Thesen', teile: [['thesen', 'Thesen'], ['exits', 'Exit-Alarme'], ['dcf', 'Reverse-DCF'], ['chancen', 'Markt-Wahrscheinlichkeit']] },
   { titel: 'Journal', teile: [['journal', 'Trades & Begründungen'], ['exitanalyse', 'Exit-Analyse']] },
 ];
@@ -16579,7 +17145,7 @@ function menueUnterZeigen(seite) {
   });
 }
 
-const SEITEN = ['home', 'tafel', 'uebersicht', 'performance', 'verteilung', 'freibetrag', 'maerkte', 'sektoren', 'themen', 'news', 'kalender', 'risiko', 'benchmark', 'stresstest', 'makro', 'earnings-moves', 'earnings-sheet', 'zahlen', 'rotation', 'prognosen', 'thesen', 'exits', 'watchlist', 'vola', 'gamma', 'volumen', 'faktoren', 'relativ', 'positionsgroesse', 'dcf', 'etf', 'stil', 'cashflow', 'positionierung', 'fonds', 'signale', 'nacht', 'geldfluss', 'chartanalyse', 'einstellungen', 'status', 'bewegung', 'weltkarte', 'handel', 'fundament', 'journal', 'exitanalyse', 'chancen', 'umbau', 'regime', 'events', 'insider', 'drift', 'paare', 'makrotage', 'absicherung', 'zertifikat', 'backtest', 'montecarlo', 'analysecharts', 'zinsen', 'makrodaten'];
+const SEITEN = ['home', 'tafel', 'uebersicht', 'performance', 'verteilung', 'freibetrag', 'maerkte', 'sektoren', 'themen', 'news', 'kalender', 'risiko', 'benchmark', 'stresstest', 'makro', 'earnings-moves', 'earnings-sheet', 'zahlen', 'rotation', 'prognosen', 'thesen', 'exits', 'watchlist', 'vola', 'gamma', 'volumen', 'faktoren', 'relativ', 'positionsgroesse', 'dcf', 'etf', 'stil', 'cashflow', 'positionierung', 'fonds', 'signale', 'nacht', 'geldfluss', 'chartanalyse', 'einstellungen', 'status', 'bewegung', 'weltkarte', 'handel', 'fundament', 'journal', 'exitanalyse', 'chancen', 'umbau', 'regime', 'events', 'insider', 'drift', 'paare', 'makrotage', 'eventstudie', 'absicherung', 'zertifikat', 'backtest', 'montecarlo', 'analysecharts', 'zinsen', 'makrodaten'];
 
 // Unter dem Logo: das Datum.
 function setzeBegruessung() {
@@ -16640,6 +17206,7 @@ function zeigeSeite() {
   if (seite === 'zertifikat') zkZeichnen();
   if (seite === 'absicherung') abLaden();
   if (seite === 'makrotage') mtLaden();
+  if (seite === 'eventstudie') esLaden();
   if (seite === 'paare') paLaden();
   if (seite === 'drift') drLaden();
   if (seite === 'insider') icLaden();

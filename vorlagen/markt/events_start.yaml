@@ -1,0 +1,66 @@
+# Startdatensatz für die Event Study: wichtige Zoll-Ereignisse 2025.
+# Uhrzeiten mit Zeitzone (New York). Alle stehen auf "bitte prüfen": Datum, Uhrzeit und Merkmale
+# sind aus dem Gedächtnis eingetragen und sollten mit einer Quelle abgeglichen werden.
+- zeit: "2025-02-01T17:00:00-05:00"
+  titel: Zölle gegen Kanada, Mexiko (25 %) und China (10 %) unterschrieben
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Eskalation, region: [Kanada, Mexiko, China], akteur: [Trump], ueberraschung: erwartet, staerke: mittel, status: bestätigt}
+  notiz: Samstag, Erlasse am Nachmittag unterschrieben. Am 3.2. für Kanada und Mexiko um 30 Tage verschoben.
+- zeit: "2025-03-04T00:01:00-05:00"
+  titel: Zölle gegen Kanada und Mexiko treten in Kraft, China auf 20 %
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Eskalation, region: [Kanada, Mexiko, China], akteur: [Trump], ueberraschung: erwartet, staerke: mittel, status: bestätigt}
+- zeit: "2025-04-02T16:00:00-04:00"
+  titel: Liberation Day – gegenseitige Zölle gegen fast alle Handelspartner
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Eskalation, region: [Welt, China, EU], akteur: [Trump], ueberraschung: überraschend, staerke: groß, status: bestätigt}
+  notiz: Rede im Rosengarten nach US-Börsenschluss.
+- zeit: "2025-04-09T13:18:00-04:00"
+  titel: 90 Tage Pause der gegenseitigen Zölle (außer China)
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Deeskalation, region: [Welt], akteur: [Trump], ueberraschung: überraschend, staerke: groß, status: bestätigt}
+  tags: [Truth Social]
+  notiz: Beitrag auf Truth Social während der Handelszeit, China gleichzeitig auf 125 % erhöht.
+- zeit: "2025-05-12T03:00:00-04:00"
+  titel: Genf – USA und China senken Zölle für 90 Tage
+  kategorie: handel
+  untertyp: handelsdeal
+  merkmale: {richtung: Deeskalation, region: [China], akteur: [US-Regierung, China-Regierung], ueberraschung: überraschend, staerke: groß, status: bestätigt}
+  notiz: Gemeinsame Erklärung am Morgen europäischer Zeit, vor US-Börsenbeginn.
+- zeit: "2025-05-23T07:43:00-04:00"
+  titel: Trump droht der EU mit 50 % Zoll ab 1. Juni
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Eskalation, region: [EU], akteur: [Trump], ueberraschung: überraschend, staerke: mittel, status: bestätigt}
+  tags: [Truth Social]
+  notiz: Vorbörslich. Am 25.5. auf den 9. Juli verschoben.
+- zeit: "2025-07-07T12:00:00-04:00"
+  titel: Zoll-Briefe an Japan, Südkorea und weitere Länder
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Eskalation, region: [Japan, Welt], akteur: [Trump], ueberraschung: erwartet, staerke: mittel, status: bestätigt}
+  tags: [Truth Social]
+- zeit: "2025-08-01T00:00:00-04:00"
+  titel: Neue Zollsätze für viele Länder (Erlass vom 31.7.)
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Eskalation, region: [Welt], akteur: [Trump], ueberraschung: erwartet, staerke: mittel, status: bestätigt}
+  notiz: Erlass am Abend des 31.7. unterschrieben, gültig ab 7.8. Uhrzeit bitte prüfen.
+- zeit: "2025-10-10T10:57:00-04:00"
+  titel: Trump droht China mit massiven Zöllen, abends 100 %
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Eskalation, region: [China], akteur: [Trump], ueberraschung: überraschend, staerke: groß, status: bestätigt}
+  tags: [Truth Social]
+  notiz: Erste Drohung während der Handelszeit, die 100 % kamen nach Börsenschluss.
+- zeit: "2025-10-12T12:00:00-04:00"
+  titel: Trump schwächt ab – „Don't worry about China“
+  kategorie: handel
+  untertyp: zoelle
+  merkmale: {richtung: Deeskalation, region: [China], akteur: [Trump], ueberraschung: überraschend, staerke: mittel, status: bestätigt}
+  tags: [Truth Social]
+  notiz: Sonntag, Uhrzeit ungefähr.

@@ -1,0 +1,49 @@
+# Kategorien und Merkmale für die Event Study (Szenarien → Event Study).
+# Du kannst Kategorien, Untertypen und Auswahlwerte ergänzen. Eigene Kategorien legst du auch im Tool an.
+# Die Schlüssel (links) bleiben fest, die Namen (rechts) kannst du ändern.
+
+kategorien:
+  handel:
+    name: Handel
+    untertypen: {zoelle: Zölle, handelsdeal: Handelsdeals, exportkontrolle: Exportkontrollen, sanktionen: Sanktionen}
+  geldpolitik:
+    name: Geldpolitik
+    untertypen: {fed_entscheid: Fed-Entscheid, fed_rede: Fed-Reden, zinsueberraschung: Zinsüberraschung, andere_notenbank: Andere Notenbanken (EZB, BoJ …)}
+  makrodaten:
+    name: Makrodaten
+    untertypen: {cpi: CPI, arbeitsmarkt: Arbeitsmarkt, bip: BIP, pmi: PMI}
+  fiskal_politik:
+    name: Fiskal und Politik
+    untertypen: {shutdown: Shutdown, schuldenobergrenze: Schuldenobergrenze, wahl: Wahlen, gericht: Gerichtsurteile, personal: Personalwechsel}
+  geopolitik:
+    name: Geopolitik
+    untertypen: {krieg: Krieg und Militär, anschlag: Anschläge, waffenstillstand: Waffenstillstand, spannungen: Spannungen}
+  energie:
+    name: Energie und Rohstoffe
+    untertypen: {opec: OPEC, oelschock: Ölschocks, lieferausfall: Lieferausfälle}
+  unternehmen:
+    name: Unternehmen
+    untertypen: {earnings: Earnings, guidance: Guidance, ma: Große Übernahmen, pleite: Pleiten}
+  aussagen:
+    name: Social Media und Aussagen
+    untertypen: {drohung: Drohung, ankuendigung: Ankündigung, ruecknahme: Rücknahme, fed_kritik: Lob oder Kritik an der Fed, marktkommentar: Marktkommentar}
+  finanzsystem:
+    name: Finanzsystem
+    untertypen: {bankenstress: Bankenstress, crash: Crashs, liquiditaet: Liquiditätsereignisse}
+
+# Auswahlwerte der Merkmale. Region und Akteur sind offen: neue Werte kannst du beim Eintragen frei schreiben.
+merkmale:
+  richtung: [Eskalation, Deeskalation, neutral]
+  region: [USA, China, EU, Japan, Kanada, Mexiko, Nahost, Russland, Ukraine, Taiwan, Welt]
+  akteur: [Trump, Fed, EZB, BoJ, US-Regierung, China-Regierung, EU-Kommission, OPEC]
+  ueberraschung: [erwartet, überraschend]
+  staerke: [klein, mittel, groß]
+  status: [bestätigt, unbestätigt]
+
+# Automatisch berechnete Marktlage am Handelstag vor dem Event (S&P 500 und VIX)
+marktlage:
+  rally_ab: 5          # S&P 500 in den 20 Handelstagen davor mindestens +5 % = "nach Rally"
+  rueckgang_ab: -5     # höchstens −5 % = "nach Rückgang"
+  vix_hoch_ab: 20      # VIX am Vortag ab 20 = "VIX hoch"
+  nahe_hoch: -3        # Abstand zum Allzeithoch bis −3 % = "nahe Hoch"
+  weit_unter_hoch: -10 # ab −10 % = "deutlich unter Hoch"
