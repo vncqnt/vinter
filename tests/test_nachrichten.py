@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from app.markt.nachrichten import abruf, eingang, extraktion, geschichten, quellen, speicher, telegram
+from app.markt.nachrichten import abruf, eingang, extraktion, geschichten, messung, nachrecherche, quellen, reaktion, speicher, telegram
 
 
 def _rss(eintraege: list[tuple[str, datetime, str]]) -> bytes:
@@ -185,10 +185,76 @@ class BewertungTest(unittest.TestCase):
         self.assertIsNotNone(geschichten.filtergrund({"titel": "8-K - Some Credit Fund (0001) (Filer)", "quelle": "SEC 8-K", "link": ""}, x))
         self.assertIsNone(geschichten.filtergrund({"titel": "Apple to acquire X", "quelle": "PR Newswire", "link": ""}, {"ticker": ["AAPL"], "ereignis": "uebernahme"}))
         self.assertIsNotNone(geschichten.filtergrund({"titel": "Why X", "quelle": "Finnhub", "link": "https://www.fool.com/investing/x"}, x))
+        self.assertIsNotNone(geschichten.filtergrund({"titel": "Allstate Trophy announces finalists", "quelle": "PR Newswire", "link": ""}, {"ticker": ["ALL"], "ereignis": "sonstiges"}))
 
     def test_rang_halbiert_sich_nach_8_stunden(self):
         jetzt = datetime(2026, 11, 24, 16, 0, tzinfo=timezone.utc)
         self.assertAlmostEqual(geschichten.rang(60, (jetzt - timedelta(hours=8)).isoformat(), jetzt), 30, places=3)
+
+
+class ReaktionTest(unittest.TestCase):
+    def _reihe(self, sprung_bei=None, sprung=0.0):
+        import numpy as np
+        import pandas as pd
+        rng = np.random.default_rng(1)
+        r = rng.normal(0, 0.0005, 600)
+        if sprung_bei is not None:
+            r[sprung_bei] = sprung
+        idx = pd.date_range("2026-11-24 14:00", periods=600, freq="1min", tz="UTC")
+        return pd.Series(100 * np.exp(np.cumsum(r)), index=idx)
+
+    def test_sprung_wird_erkannt_ruhe_nicht(self):
+        ruhig = self._reihe()
+        sigma = reaktion.sigma_aus(ruhig)
+        self.assertAlmostEqual(sigma, 0.0005, delta=0.0001)
+        self.assertEqual(reaktion.spruenge(ruhig, sigma, ruhig.index[0], 0.5), [])  # reines Rauschen: nichts über 0,5 %
+        laut = self._reihe(400, 0.006)  # 0,6 % in einer Minute = 12 Sigma
+        sp = reaktion.spruenge(laut, sigma, laut.index[0], 0.15)
+        self.assertTrue(any(x["fenster"] == 1 and x["sigma"] > 10 for x in sp))
+
+    def test_mindestbewegung(self):
+        laut = self._reihe(400, 0.006)
+        self.assertEqual(reaktion.spruenge(laut, reaktion.sigma_aus(laut), laut.index[0], 5.0), [])
+
+
+class SeiteTest(unittest.TestCase):
+    def test_links_aus_webseite(self):
+        q = {"name": "USTR", "adresse": "https://ustr.gov/x", "stufe": 1,
+             "muster": r'href="(?P<link>/about[^"]*?/press-releases/\d{4}/[a-z]+/[^"]+)"[^>]*>\s*(?P<titel>[^<]{15,300})</a>'}
+        html = ('<a href="/about/policy-offices/press-office/press-releases/2026/november/greer-call">Readout of Ambassador Greer&#8217;s Call</a>'
+                '<a href="/about/policy-offices/press-office/press-releases/2026/november/greer-call">Readout of Ambassador Greer&#8217;s Call</a>'
+                '<a href="/somewhere">Not a press release at all here</a>')
+        m = abruf.eintraege_seite(q, html)
+        self.assertEqual(len(m), 1)
+        self.assertEqual(m[0]["titel"], "Readout of Ambassador Greer’s Call")
+        self.assertTrue(m[0]["link"].startswith("https://ustr.gov/about/"))
+
+    def test_suchbegriffe(self):
+        b = nachrecherche.suchbegriffe("*NEW US TARIFFS EXPECTED TUESDAY WON'T EXCEED TRADE DEAL LEVELS - WSJ")
+        self.assertIn("tariffs", b)
+        self.assertNotIn("wsj", b)
+        self.assertLessEqual(len(b.split()), 6)
+
+
+class MessungTest(Grundlage):
+    def test_wer_war_zuerst(self):
+        db = speicher.verbinden()
+        with db:
+            geschichten._schema(db)
+            db.execute("INSERT INTO stories (id, titel, erstes, letztes, anzahl, score) VALUES (1, 'Zölle', '2026-11-24T14:00:00+00:00', '2026-11-24T14:05:00+00:00', 3, 60)")
+        db.close()
+        jetzt = datetime.now(timezone.utc)
+        speicher.einfuegen([
+            {"schluessel": "a", "quelle": "Telegram @X", "art": "telegram", "titel": "A", "gesehen": jetzt.isoformat()},
+            {"schluessel": "b", "quelle": "FinancialJuice", "art": "rss", "titel": "B", "gesehen": (jetzt + timedelta(minutes=2)).isoformat()},
+        ])
+        db = speicher.verbinden()
+        with db:
+            db.execute("UPDATE meldungen SET story=1")
+        db.close()
+        m = {x["quelle"]: x for x in messung.quellen_messung()}
+        self.assertEqual(m["Telegram @X"]["anteil_zuerst"], 1.0)
+        self.assertEqual(m["FinancialJuice"]["verzug_median_min"], 2.0)
 
 
 if __name__ == "__main__":

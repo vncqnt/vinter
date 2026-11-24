@@ -53,6 +53,17 @@ def _quelle(url: str) -> str:
     return QUELLEN.get(host, host)
 
 
+_news_merk = {"zeit": 0.0, "wert": None}
+
+
+def _newsfeed() -> dict:
+    """Newsfeed-Messung (Quellen, Ausfälle, Lücken); die Lückenprüfung lädt Kurse, daher 10 Minuten merken."""
+    if time.time() - _news_merk["zeit"] > 600 or _news_merk["wert"] is None:
+        from .markt.nachrichten import messung
+        _news_merk.update(zeit=time.time(), wert=messung.status())
+    return _news_merk["wert"]
+
+
 def _fehler_text(f: BaseException) -> str:
     text = f"{type(f).__name__}: {f}"
     # Adressen können Keys enthalten (…&apikey=…): nur Typ und den Teil vor einer Adresse zeigen
@@ -307,6 +318,7 @@ def seite() -> dict:
         "netz": [{"quelle": q, **n} for q, n in sorted(netz.items(), key=lambda x: (-x[1].get("fehler", 0), x[0]))],
         "handel": handel,
         "ki": ki.status(),
+        "newsfeed": _newsfeed(),
         "keys": [{"name": k["name"], "gesetzt": k["gesetzt"], "herkunft": k["herkunft"], "text": k["text"]} for k in keys()],
         "fehler": fehler,
         "stand": jetzt.isoformat(timespec="seconds"),

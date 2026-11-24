@@ -43,6 +43,14 @@ def laden() -> dict:
         if _stand["mtime"] != mtime:
             daten = yaml.safe_load(DATEI.read_text(encoding="utf-8")) or {}
             daten.setdefault("quellen", [])
+            # Quellen, die mit einem Update neu in die Vorlage kamen, gelten auch ohne Eintrag in deiner Datei
+            # (abschalten: in deiner Datei mit "aktiv: false" aufführen). Deine Datei wird dabei nicht verändert.
+            try:
+                vorlage = yaml.safe_load(VORLAGE.read_text(encoding="utf-8")) or {}
+                namen = {q.get("name") for q in daten["quellen"]}
+                daten["quellen"] += [q for q in vorlage.get("quellen") or [] if q.get("name") not in namen]
+            except (OSError, yaml.YAMLError):
+                pass
             daten.setdefault("telegram", {})
             daten["telegram"].setdefault("kanaele", [])
             _stand.update(mtime=mtime, daten=daten)

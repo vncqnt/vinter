@@ -88,6 +88,8 @@ def hintergrund_starten():
     nachrichten_geschichten.starte()
     from .markt.nachrichten import nachrecherche as nachrichten_nachrecherche
     nachrichten_nachrecherche.starte()
+    from .markt.nachrichten import reaktion as nachrichten_reaktion
+    nachrichten_reaktion.starte()
     from .markt.nachrichten import telegram as nachrichten_telegram
     nachrichten_telegram.starte()
     # Lädt einmal am Tag die großen Datenmengen für "Großes Geld" (S&P-500-Kurse, KGVs, FINRA, 13F).
@@ -1856,6 +1858,38 @@ def nachrichten_geschichten_route(stunden: int = 24, b: Benutzer = Ich):
         return uebersicht(b, stunden)
     except Exception:
         return {"fehler": "Der Newsfeed konnte gerade nicht geladen werden."}
+
+
+@app.get("/api/nachrichten/live")
+def nachrichten_live(stunden: int = 12, ausgefiltert: bool = False, b: Benutzer = Ich):
+    from .nutzer.nachrichten import live
+    try:
+        return live(b, stunden, ausgefiltert)
+    except Exception:
+        return {"fehler": "Der Live-Ticker konnte gerade nicht geladen werden."}
+
+
+@app.get("/api/nachrichten/reaktion/{story_id}")
+def nachrichten_reaktion(story_id: int, b: Benutzer = Ich):
+    """Mini-Chart: passende Märkte rund um das erste Auftauchen einer Geschichte."""
+    from .markt.nachrichten import reaktion, speicher
+    db = speicher.verbinden()
+    try:
+        s = db.execute("SELECT erstes, ereignis, nur_fuer FROM stories WHERE id=?", (story_id,)).fetchone()
+    finally:
+        db.close()
+    if not s or (s["nur_fuer"] and s["nur_fuer"] != b.name):
+        return {"fehler": "Diese Geschichte gibt es nicht."}
+    return reaktion.verlauf(dict(s))
+
+
+@app.get("/api/nachrichten/luecken")
+def nachrichten_luecken(b: Benutzer = Ich):
+    from .nutzer.nachrichten import luecken
+    try:
+        return luecken(b)
+    except Exception:
+        return {"fehler": "Die Lückenprüfung ging gerade nicht."}
 
 
 @app.post("/api/nachrichten/bewertung")

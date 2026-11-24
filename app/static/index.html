@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="Vinter">
   <link rel="preload" href="schriften/unbounded-400-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="schriften/manrope-400-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=235">
+  <link rel="stylesheet" href="style.css?v=237">
   <link rel="stylesheet" href="vinter.css?v=1">
 </head>
 <body>
@@ -1166,6 +1166,7 @@
     <div class="seite" id="seite-news" hidden>
       <h1>News</h1>
       <div class="filter n-ansicht" id="n-ansicht" role="group" aria-label="Ansicht wählen">
+        <button type="button" data-ansicht="live">Live</button>
         <button type="button" data-ansicht="ticker">Geschichten</button>
         <button type="button" data-ansicht="reden">Reden &amp; Zitate</button>
       </div>
@@ -1174,6 +1175,14 @@
         <div class="filter" id="r-kategorien" role="group" aria-label="Nach Sprechern filtern"></div>
         <div class="r-auftritte" id="r-auftritte"></div>
         <p class="hinweis">Vinter erkennt in den Eilmeldungen von FinancialJuice Aussagen im Format „Sprecher: Aussage“ und bündelt die Zitate einer Person mit weniger als einer Stunde Abstand zu einem Auftritt (Rede, Interview, Pressekonferenz). LIVE heißt: letzte Aussage vor höchstens 20 Minuten. Die Kernaussagen sind echte Zitate, die das lokale Sprachmodell als am repräsentativsten auswählt; es formuliert nichts neu. Die Tendenz bei Notenbankern ist eine grobe Zählung von Signalwörtern (z. B. „hike“ gegen „cut“), keine Einordnung durch Fachleute. Den offiziellen Wortlaut verlinkt Vinter, sobald Fed oder EZB die Rede veröffentlichen. Zitate sind auf Englisch, wie sie gemeldet werden.</p>
+      </div>
+      <div id="n-teil-live" hidden>
+        <p id="n-live-status" class="sekundaer" role="status">Wird geladen …</p>
+        <div class="filter n-live-filter" id="n-live-filter" role="group" aria-label="Live-Ticker filtern">
+          <button type="button" data-live="alle">Alle<span></span></button><button type="button" data-live="eil" title="Squawk, Telegram, eigene Meldungen">Eilmeldungen<span></span></button><button type="button" data-live="offiziell" title="Weißes Haus, Fed, EZB, BLS, SEC">Offiziell<span></span></button><button type="button" data-live="firmen" title="Meldungen mit erkannter Firma">Firmen<span></span></button><button type="button" data-live="meine" title="Depot und Watchlist">Meine<span></span></button>
+        </div>
+        <div class="karte n-live" id="n-live-liste" aria-live="polite"></div>
+        <p class="hinweis">Jede Meldung einzeln und genau in der Reihenfolge, in der Vinter sie gesehen hat (neueste oben), wie ein Terminal-Ticker. Fett: gehört zu einer wichtigen Geschichte oder ist als Eilmeldung formuliert. Grün links: deine Positionen und Watchlist. Gold: Telegram. „n Meldungen“ springt zur gebündelten Geschichte. Werbung und Rauschen sind hier schon herausgefiltert (zu sehen unter Geschichten → Ausgefiltert). Der Zeitraum gilt wie bei den Geschichten.</p>
       </div>
       <div id="n-teil-ticker">
       <p id="n-status" class="sekundaer" role="status">News werden geladen …</p>
@@ -1189,6 +1198,7 @@
         </div>
       </div>
       <div class="n-eil" id="n-eil" role="alert" hidden></div>
+      <p class="n-luecken" id="n-luecken" hidden></p>
       <form class="n-eingabe" id="n-eingabe"><input name="text" class="pv-select" maxlength="2000" placeholder="Eigene Meldung oder Link einspeisen (z. B. aus X oder Telegram)" aria-label="Eigene Meldung oder Link"><button class="knopf ca-mini" type="submit">Einspeisen</button></form>
       <div id="n-quellen" class="n-quellen" hidden></div>
       <div class="n-stories" id="n-liste" aria-live="polite"></div>
@@ -1220,6 +1230,6 @@
   <script src="lib/karte/d3.min.js"></script>
   <script src="lib/karte/topojson-client.min.js"></script>
   <script src="lib/lightweight-charts/lightweight-charts.standalone.production.js"></script>
-  <script src="app.js?v=288"></script>
+  <script src="app.js?v=290"></script>
 </body>
 </html>

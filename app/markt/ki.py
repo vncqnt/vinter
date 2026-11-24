@@ -134,6 +134,40 @@ def zahlen_ergaenzen(text: str, gefunden: dict) -> dict | None:
     return {**daten, "modell": e["modell"], "dauer": round(time.time() - start, 1)}
 
 
+NEWS_SYSTEM = (
+    "You classify financial news headlines for a trader. For each headline pick exactly one label: "
+    "macro_politics (market-moving macro data, central banks, trade and tariffs, geopolitics, government policy), "
+    "company (news about a specific company), ad_opinion (advertising, promotion, stock tips, opinion, listicles, clickbait), "
+    "noise (irrelevant to markets). Answer only JSON: {\"labels\": [one label per headline, same order]}."
+)
+NEWS_LABELS = {"macro_politics", "company", "ad_opinion", "noise"}
+
+
+def nachrichten_einordnen(titel: list[str]) -> list[str] | None:
+    """Phase I des Newsfeeds: Schlagzeilen in Stapeln einordnen (nur mit KI_ANBIETER=ollama). None = KI aus oder Fehler."""
+    e = _einstellungen()
+    if e["anbieter"] != "ollama" or not titel:
+        return None
+    liste = "\n".join(f"{i + 1}. {t[:200]}" for i, t in enumerate(titel))
+    start = time.time()
+    try:
+        antwort = requests.post(f"{e['adresse']}/api/generate", timeout=e["zeitlimit"], json={
+            "model": e["modell"], "system": NEWS_SYSTEM, "stream": False, "format": "json",
+            "prompt": f"Headlines:\n{liste}\n\nReturn the JSON now.", "keep_alive": "5m",
+            "options": {"num_thread": e["threads"], "temperature": 0.0},
+        })
+        antwort.raise_for_status()
+        labels = json.loads(antwort.json()["response"]).get("labels")
+    except Exception as fehler:
+        _status.update(erreichbar=False, fehler=type(fehler).__name__)
+        return None
+    _status.update(erreichbar=True, dauer=round(time.time() - start, 1), fehler=None,
+                   letzte_erfolgreich=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    if not isinstance(labels, list) or len(labels) != len(titel):
+        return None
+    return [l if l in NEWS_LABELS else "noise" for l in labels]
+
+
 def status() -> dict:
     """Für die Status-Seite: eingeschaltet, erreichbar, Dauer und Zeitpunkt der letzten Zusammenfassung."""
     e = _einstellungen()

@@ -33,12 +33,14 @@ log = logging.getLogger(__name__)
 
 AEHNLICH = 0.72            # Kosinus-Ähnlichkeit, ab der eine Meldung zur Geschichte gehört
 AEHNLICH_MIT_BEZUG = 0.58  # niedriger, wenn Firma, Land, Institution oder Person übereinstimmen
-AEHNLICH_GLEICHES_EREIGNIS = 0.50  # noch niedriger bei gleichem Markt-Ereignis (z. B. mehrere Zoll-Meldungen)
+AEHNLICH_GLEICHES_EREIGNIS = 0.50  # noch niedriger bei gleichem Markt-Ereignis UND gemeinsamem Bezug (z. B. mehrere Zoll-Meldungen)
+AEHNLICH_NUR_EREIGNIS = 0.64       # gleiches Ereignis ohne gemeinsamen Bezug (sonst landen Reden verschiedener Notenbanker zusammen)
+AEHNLICH_RECHERCHE = 0.45          # Treffer der Nachrecherche zur Geschichte, für die gesucht wurde
 # Gemessen am 24.11.2026: Meldungen zur selben Zoll-Ankündigung lagen bei 0,52–0,70, ein anderes Handelsthema
 # (China setzt Exportkontrollen aus) bei 0,10–0,47, Notenbank gegen Zölle bei 0,0–0,3.
 FENSTER = timedelta(hours=12)
 NEWSWIRES = {"GlobeNewswire", "PR Newswire", "Business Wire"}
-BEHOERDEN = {"Weißes Haus Erlasse", "Fed", "EZB", "BLS"}  # der Nachrichten-Blog des Weißen Hauses ist meist PR
+BEHOERDEN = {"Weißes Haus Erlasse", "Fed", "EZB", "BLS", "USTR", "US-Finanzministerium"}  # der Nachrichten-Blog des Weißen Hauses ist meist PR
 GEWICHT = {"zoelle_handel": 35, "notenbank": 35, "konjunktur": 30, "geopolitik": 30, "uebernahme": 25, "insolvenz": 25,
            "prognose": 20, "geschaeftszahlen": 20, "bilanzproblem": 20, "regulierung": 15, "schulden": 15,
            "rechtsstreit": 10, "personalien": 10, "rating": 10, "abschreibung": 10, "umbau": 10, "vertrag": 8,
@@ -85,6 +87,9 @@ def filtergrund(m: dict, x: dict) -> str | None:
         return "Werbung (Seite auf der Sperrliste)"
     if m["quelle"] in NEWSWIRES and not x["ticker"] and x["ereignis"] not in MARKTEREIGNISSE:
         return "Pressemitteilung ohne börsennotierte Firma"
+    if m["quelle"] in NEWSWIRES and x["ereignis"] in ("sonstiges", "personalien"):
+        # z. B. Sponsoring, Auszeichnungen, Produkt-PR großer Firmen: kein Marktereignis
+        return "Pressemitteilung ohne Marktereignis"
     if m["quelle"].startswith("SEC") and not x["ticker"]:
         return "SEC-Meldung ohne börsennotierte Aktie"
     return None
@@ -110,16 +115,22 @@ def _schema(db) -> None:
     spalten = {r[1] for r in db.execute("PRAGMA table_info(meldungen)")}
     if "vektor" not in spalten:
         db.execute("ALTER TABLE meldungen ADD COLUMN vektor BLOB")
+    if "hinweis" not in spalten:
+        db.execute("ALTER TABLE meldungen ADD COLUMN hinweis INTEGER")
+    if "ki" not in spalten:
+        db.execute("ALTER TABLE meldungen ADD COLUMN ki TEXT")
     db.execute("""CREATE TABLE IF NOT EXISTS stories (
         id INTEGER PRIMARY KEY, titel TEXT, erstes TEXT, letztes TEXT, anzahl INTEGER, quellen TEXT, ereignis TEXT,
         ticker TEXT, laender TEXT, stellen TEXT, score REAL, bestaetigt INTEGER, eil INTEGER, nur_fuer TEXT,
         vektor BLOB, aktualisiert TEXT)""")
     db.execute("CREATE INDEX IF NOT EXISTS stories_letztes ON stories(letztes)")
+    if "reaktion" not in {r[1] for r in db.execute("PRAGMA table_info(stories)")}:
+        db.execute("ALTER TABLE stories ADD COLUMN reaktion TEXT")
 
 
 # ---- Bewertung ----
 
-def bewerten(mitglieder: list[dict]) -> dict:
+def bewerten(mitglieder: list[dict], reaktion: list | None = None) -> dict:
     """Kennzahlen einer Geschichte aus ihren Meldungen (reine Funktion). mitglieder: Zeilen mit extrakt (dict)."""
     zeiten = sorted(m["gesehen"] for m in mitglieder)
     quellen = list(dict.fromkeys(m["quelle"] for m in sorted(mitglieder, key=lambda m: m["gesehen"])))
@@ -145,6 +156,7 @@ def bewerten(mitglieder: list[dict]) -> dict:
     in_30 = sum(1 for z in zeiten if datetime.fromisoformat(z) >= letzte - timedelta(minutes=30))
     score += 10 if in_30 >= 3 else 0
     score += 5 if any(e.get("eil") for e in ex) else 0
+    score += 20 if reaktion else 0  # Markt sprang in den 15 Minuten nach dieser Geschichte (reaktion.py)
     titel_von = next((m for m in sorted(mitglieder, key=lambda m: m["gesehen"]) if m.get("stufe") == 1 and not m["quelle"].startswith("SEC")), None) \
         or sorted(mitglieder, key=lambda m: m["gesehen"])[0]
     privat = {m.get("nur_fuer") for m in mitglieder}
@@ -185,6 +197,7 @@ def verarbeiten(ids: list[int]) -> None:
             if not z["filter"] and (z["quelle"], z["titel"]) in im_stapel:
                 z["filter"] = "Doppelt (dieselbe Quelle hat das schon gemeldet)"
             im_stapel.add((z["quelle"], z["titel"]))
+        _ki_einordnen([z for z in zeilen if not z["filter"]])
         behalten = [z for z in zeilen if not z["filter"]]
         vektoren = _vektoren([z["titel"] for z in behalten]) if behalten else []
         grenze = (datetime.now(timezone.utc) - FENSTER).isoformat()
@@ -194,7 +207,7 @@ def verarbeiten(ids: list[int]) -> None:
             s["bezug"] = set(json.loads(s["ticker"] or "[]")) | set(json.loads(s["stellen"] or "[]")) | set(json.loads(s["laender"] or "[]"))
         with db:
             for z in zeilen:
-                db.execute("UPDATE meldungen SET extrakt=?, filter=? WHERE id=?", (json.dumps(z["extrakt"], ensure_ascii=False), z["filter"], z["id"]))
+                db.execute("UPDATE meldungen SET extrakt=?, filter=?, ki=? WHERE id=?", (json.dumps(z["extrakt"], ensure_ascii=False), z["filter"], z.get("ki"), z["id"]))
             for z, v in zip(behalten, vektoren):
                 x = z["extrakt"]
                 bezug = set(x["ticker"]) | set(x["institutionen"]) | set(x["personen"]) | set(x["laender"])
@@ -205,10 +218,15 @@ def verarbeiten(ids: list[int]) -> None:
                     wert = float(np.dot(v, s["v"]))
                     gleich = x["ereignis"] == s["ereignis"] and x["ereignis"] in MARKTEREIGNISSE
                     gemeinsam = bool(bezug & s["bezug"])
-                    passt = (wert >= AEHNLICH or (wert >= AEHNLICH_MIT_BEZUG and (gemeinsam or gleich))
-                             or (gleich and gemeinsam and wert >= AEHNLICH_GLEICHES_EREIGNIS))
+                    passt = (wert >= AEHNLICH or (gemeinsam and wert >= AEHNLICH_MIT_BEZUG) or (gleich and wert >= AEHNLICH_NUR_EREIGNIS)
+                             or (gleich and gemeinsam and wert >= AEHNLICH_GLEICHES_EREIGNIS)
+                             or (z.get("hinweis") == s["id"] and wert >= AEHNLICH_RECHERCHE))
                     if passt and wert > beste_wert:
                         beste, beste_wert = s, wert
+                if beste is None and z.get("art") == "recherche":
+                    # Nachrecherche: nur zu einer bestehenden Geschichte, sonst wäre es neues Rauschen
+                    db.execute("UPDATE meldungen SET filter=? WHERE id=?", ("Nachrecherche ohne passende Geschichte", z["id"]))
+                    continue
                 if beste is None:
                     cur = db.execute("INSERT INTO stories (titel, erstes, letztes, anzahl, vektor) VALUES (?, ?, ?, 1, ?)",
                                      (z["titel"], z["gesehen"], z["gesehen"], _als_bytes(v)))
@@ -228,13 +246,30 @@ def verarbeiten(ids: list[int]) -> None:
         db.close()
 
 
+def _ki_einordnen(zeilen: list[dict]) -> None:
+    """Phase I: Ollama ordnet Schlagzeilen ein (nur wenn eingeschaltet). Werbung/Meinung wird aussortiert.
+    Fällt die KI aus oder ist sie aus, passiert nichts und alles andere läuft normal."""
+    from .. import ki
+    zu_tun = [z for z in zeilen if z.get("art") not in ("manuell",) and not z.get("ki")]
+    for i in range(0, len(zu_tun), 20):
+        stapel = zu_tun[i:i + 20]
+        labels = ki.nachrichten_einordnen([z["titel"] for z in stapel])
+        if labels is None:
+            return
+        for z, l in zip(stapel, labels):
+            z["ki"] = l
+            if l == "ad_opinion":
+                z["filter"] = "KI: Werbung oder Meinung"
+
+
 def _aktualisieren(db, story_id: int, vektor: np.ndarray) -> None:
     mitglieder = []
     for r in db.execute("SELECT quelle, stufe, titel, gesehen, nur_fuer, extrakt FROM meldungen WHERE story=?", (story_id,)):
         m = dict(r)
         m["extrakt"] = json.loads(m["extrakt"]) if m["extrakt"] else {}
         mitglieder.append(m)
-    b = bewerten(mitglieder)
+    r = db.execute("SELECT reaktion FROM stories WHERE id=?", (story_id,)).fetchone()
+    b = bewerten(mitglieder, json.loads(r[0]) if r and r[0] else None)
     db.execute("""UPDATE stories SET titel=?, erstes=?, letztes=?, anzahl=?, quellen=?, ereignis=?, ticker=?, laender=?, stellen=?,
                   score=?, bestaetigt=?, eil=?, nur_fuer=?, vektor=?, aktualisiert=? WHERE id=?""",
                (b["titel"], b["erstes"], b["letztes"], b["anzahl"], json.dumps(b["quellen"], ensure_ascii=False), b["ereignis"],
@@ -293,7 +328,7 @@ def liste(benutzer: str, stunden: int = 24, ausgefiltert: bool = False) -> list[
             _schema(db)
         jetzt = datetime.now(timezone.utc)
         stories = [dict(r) for r in db.execute(
-            "SELECT id, titel, erstes, letztes, anzahl, quellen, ereignis, ticker, laender, stellen, score, bestaetigt, eil, nur_fuer "
+            "SELECT id, titel, erstes, letztes, anzahl, quellen, ereignis, ticker, laender, stellen, score, bestaetigt, eil, nur_fuer, reaktion "
             "FROM stories WHERE letztes >= ? AND (nur_fuer IS NULL OR nur_fuer = ?)", (grenze, benutzer))]
         ids = [s["id"] for s in stories]
         meldungen: dict[int, list] = {}
@@ -304,7 +339,7 @@ def liste(benutzer: str, stunden: int = 24, ausgefiltert: bool = False) -> list[
                 meldungen.setdefault(r["story"], []).append(dict(r))
         aus = []
         for s in stories:
-            for k in ("quellen", "ticker", "laender", "stellen"):
+            for k in ("quellen", "ticker", "laender", "stellen", "reaktion"):
                 s[k] = json.loads(s[k] or "[]")
             s["meldungen"] = meldungen.get(s["id"], [])
             if not s["meldungen"]:

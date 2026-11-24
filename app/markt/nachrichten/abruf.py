@@ -99,6 +99,31 @@ def eintraege(q: dict, inhalt: bytes, einst: dict) -> list[dict]:
     return aus
 
 
+def eintraege_seite(q: dict, html_text: str) -> list[dict]:
+    """Webseite ohne Feed (z. B. USTR, US-Finanzministerium): Links per Muster aus news_quellen.yaml.
+    Das Muster braucht die Gruppen 'link' und 'titel', optional 'zeit' (ISO-Datum). Reine Funktion."""
+    import html as html_mod
+    from urllib.parse import urljoin
+    aus, gesehen = [], set()
+    for m in re.finditer(q["muster"], html_text, re.S):
+        link = urljoin(q["adresse"], html_mod.unescape(m.group("link")))
+        titel = speicher.sauber(m.group("titel"), 500)
+        if not titel or link in gesehen:
+            continue
+        gesehen.add(link)
+        zeit = None
+        if "zeit" in m.groupdict() and m.group("zeit"):
+            try:
+                zeit = datetime.fromisoformat(m.group("zeit").replace("Z", "+00:00")).astimezone(timezone.utc).isoformat(timespec="seconds")
+            except ValueError:
+                pass
+        if zeit and zeit < (datetime.now(timezone.utc) - ZU_ALT).isoformat():
+            continue  # ältere Einträge der Seite nicht übernehmen (wie bei den Feeds)
+        aus.append({"schluessel": speicher.schluessel(q["name"], link), "quelle": q["name"], "art": "seite",
+                    "stufe": int(q.get("stufe", 1)), "titel": titel, "text": "", "link": link, "zeit": zeit})
+    return aus[: int(q.get("hoechstens", 30))]
+
+
 def abrufen(q: dict) -> int:
     """Eine Quelle einmal abfragen. Gibt die Zahl neuer Meldungen zurück (Fehler werden gemeldet, nicht geworfen)."""
     name = q["name"]
@@ -126,13 +151,20 @@ def abrufen(q: dict) -> int:
     if r.status_code != 200:
         speicher.quelle_melden(name, False, fehler=f"HTTP {r.status_code}")
         return 0
-    meldungen = eintraege(q, r.content, quellen.laden())
+    if q.get("art") == "seite":
+        meldungen = eintraege_seite(q, r.text)
+        if not meldungen and not re.search(q["muster"], r.text, re.S):
+            speicher.quelle_melden(name, False, fehler="Keine Einträge gefunden (Seite verändert?)")
+            return 0
+    else:
+        meldungen = eintraege(q, r.content, quellen.laden())
     if not zustand.get("letzter_ok"):
-        # Erster Abruf: Vinter hat diese Meldungen nicht live gesehen. Als "gesehen" gilt die Zeit laut Quelle,
-        # sonst sähe es später so aus, als hätte diese Quelle alles zuerst gehabt.
+        # Erster Abruf: Vinter hat diese Meldungen nicht live gesehen. Als "gesehen" gilt die Zeit laut Quelle
+        # (ohne Zeitangabe: zwei Tage zurück), sonst sähe es später so aus, als hätte diese Quelle alles zuerst gehabt.
+        frueher = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(timespec="seconds")
         for m in meldungen:
-            m["gesehen"] = m["zeit"] or speicher.jetzt()
-    if not meldungen and b"<html" in r.content[:500].lower():
+            m["gesehen"] = m["zeit"] or frueher
+    if not meldungen and q.get("art") != "seite" and b"<html" in r.content[:500].lower():
         speicher.quelle_melden(name, False, fehler="Webseite statt Feed (gesperrt?)")
         return 0
     ids = speicher.einfuegen(meldungen)
@@ -153,7 +185,7 @@ def _schleife():
         laufend: dict[str, object] = {}
         while True:
             try:
-                for q in quellen.quellen("rss"):
+                for q in quellen.quellen("rss") + quellen.quellen("seite"):
                     name = q["name"]
                     if name in laufend and not laufend[name].done():
                         continue

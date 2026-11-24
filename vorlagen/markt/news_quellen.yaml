@@ -20,7 +20,7 @@ quellen:
     art: rss
     adresse: https://www.financialjuice.com/feed.ashx?xy=rss
     stufe: 2
-    intervall_s: 45
+    intervall_s: 60
     hinweis: inoffizieller Feed, drosselt bei zu vielen Abfragen
   - name: SEC 8-K
     art: rss
@@ -75,6 +75,19 @@ quellen:
     stufe: 1
     intervall_s: 300
     kontakt: sec
+  # Webseiten ohne Feed (art: seite): Links per Muster mit den Gruppen link, titel und optional zeit
+  - name: USTR
+    art: seite
+    adresse: https://ustr.gov/about-us/policy-offices/press-office/press-releases
+    stufe: 1
+    intervall_s: 300
+    muster: 'href="(?P<link>/about[^"]*?/press-releases/\d{4}/[a-z]+/[^"]+)"[^>]*>\s*(?P<titel>[^<]{15,300})</a>'
+  - name: US-Finanzministerium
+    art: seite
+    adresse: https://home.treasury.gov/news/press-releases
+    stufe: 1
+    intervall_s: 300
+    muster: '<time datetime=(?P<zeit>[0-9T:Z\-]+)[^>]*>.{0,400}?<a href=(?P<link>/news/press-releases/[a-z0-9]+/?)[^>]*>(?P<titel>[^<]+)</a>'
   - name: Telegram
     art: telegram
     stufe: 2

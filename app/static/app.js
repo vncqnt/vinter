@@ -3074,6 +3074,34 @@ const NEWS_TYP = {
   kapitalmassnahme: 'Kapitalmaßnahme', finanzierung: 'Finanzierung', mitteilung: 'Mitteilung', boersennotierung: 'Börsennotierung',
   pflichtmeldung: 'Pflichtmeldung', sonstiges: 'Sonstiges',
 };
+
+// Marktreaktion einer Geschichte: Text aus den erkannten Sprüngen, Mini-Chart auf Klick (/api/nachrichten/reaktion/{id})
+const newsReaktionText = (s) => (s.reaktion?.length
+  ? `<p class="n-s-reaktion"><span class="n-s-reak-zeichen">Marktreaktion</span> ${s.reaktion.slice(0, 3).map((r) => `${esc(r.markt)} <b class="${r.veraenderung >= 0 ? 'plus' : 'minus'}">${ggVz(r.veraenderung, gz2)} %</b> in ${r.fenster} Min. (${gz1.format(Math.abs(r.sigma))} σ, ${uhrzeit.format(new Date(r.zeit))})`).join(' · ')}
+     <button type="button" class="knopf ca-mini" data-reaktion-chart="${s.id}">Verlauf</button></p><div class="n-s-chart" id="n-chart-${s.id}" hidden></div>`
+  : (s.score >= 45 && Date.now() - new Date(s.erstes) < 24 * 3600e3 ? `<p class="n-s-reaktion"><button type="button" class="knopf ca-mini" data-reaktion-chart="${s.id}">Markt rund um die Meldung</button></p><div class="n-s-chart" id="n-chart-${s.id}" hidden></div>` : ''));
+
+function newsMiniChart(d) {
+  if (!d.maerkte?.length) return '<p class="klein sekundaer">Für diese Zeit liegen keine Minutenkurse vor (Vinter merkt sich etwa die letzten 1–2 Tage).</p>';
+  const B = 520, H = 140, L = 34, R = 8, O = 10, U = 20;
+  const alle = d.maerkte.flatMap((m) => m.punkte);
+  const zeiten = alle.map((p) => new Date(p[0]).getTime());
+  const t0 = Math.min(...zeiten), t1 = Math.max(...zeiten);
+  const werte = alle.map((p) => p[1]);
+  const lo = Math.min(0, ...werte), hi = Math.max(0, ...werte), span = (hi - lo) || 0.1;
+  const X = (t) => L + (t - t0) / ((t1 - t0) || 1) * (B - L - R), Y = (v) => O + (hi - v) / span * (H - O - U);
+  const farben = ['var(--akzent)', 'var(--gold)'];
+  const linien = d.maerkte.map((m, i) => `<path fill="none" stroke="${farben[i % 2]}" stroke-width="1.5" d="${m.punkte.map((p, k) => `${k ? 'L' : 'M'}${X(new Date(p[0]).getTime()).toFixed(1)},${Y(p[1]).toFixed(1)}`).join('')}"/>`).join('');
+  const start = X(new Date(d.start).getTime());
+  return `<svg viewBox="0 0 ${B} ${H}" class="n-mini" role="img" aria-label="Marktverlauf rund um die Meldung">
+    <line x1="${L}" x2="${B - R}" y1="${Y(0)}" y2="${Y(0)}" class="n-mini-null"/>
+    <line x1="${start}" x2="${start}" y1="${O}" y2="${H - U}" class="n-mini-start"/>
+    <text x="${start + 3}" y="${O + 8}" class="n-mini-text">erste Meldung</text>
+    <text x="2" y="${Y(hi) + 4}" class="n-mini-text">${ggVz(hi, gz2)} %</text><text x="2" y="${Y(lo)}" class="n-mini-text">${ggVz(lo, gz2)} %</text>
+    ${linien}
+    <text x="${L}" y="${H - 4}" class="n-mini-text">${uhrzeit.format(new Date(t0))}</text><text x="${B - R}" y="${H - 4}" text-anchor="end" class="n-mini-text">${uhrzeit.format(new Date(t1))}</text>
+  </svg><p class="klein sekundaer">${d.maerkte.map((m, i) => `<span style="color:${farben[i % 2]}">■</span> ${esc(m.markt)}`).join(' · ')} · Prozent ab der ersten Meldung · zeitlicher Zusammenhang, kein Beweis</p>`;
+}
 const NEWS_BEREICHE = [['markt', 'Markt bewegend'], ['meine', 'Meine Positionen'], ['alle', 'Alle'], ['aus', 'Ausgefiltert']];
 
 function feedTag(iso) {
@@ -3116,6 +3144,7 @@ function newsStory(s) {
     <h3 class="n-s-titel">${newsLink(s.titel, s.meldungen.find((m) => m.titel === s.titel)?.link ?? erste.link)}</h3>
     ${text && text !== s.titel ? `<p class="n-s-text">${esc(text.slice(0, 280))}${text.length > 280 ? ' …' : ''}</p>` : ''}
     ${bezug || extra ? `<p class="n-s-bezug">${bezug}${extra ? `<span class="n-s-extra">${esc(extra)}</span>` : ''}</p>` : ''}
+    ${newsReaktionText(s)}
     ${strahl}
     <div class="n-s-fuss"><span class="sekundaer">${s.anzahl} ${s.anzahl === 1 ? 'Meldung' : 'Meldungen'} · zuletzt ${newsSeit(s.letztes)}</span>
       <span class="n-s-urteil" role="group" aria-label="Bewerten">${[['wichtig', 'Wichtig'], ['unwichtig', 'Unwichtig'], ['werbung', 'Werbung']].map(([u, n]) => `<button type="button" class="knopf ca-mini" data-urteil="${u}">${n}</button>`).join('')}</span></div>
@@ -3167,8 +3196,19 @@ el('n-zeitraum').addEventListener('click', (e) => {
   feedStunden = Number(b.dataset.stunden);
   try { localStorage.setItem('newsStunden', String(feedStunden)); } catch {}
   ladeNews();
+  liveDaten = null;
 });
 el('n-liste').addEventListener('click', async (e) => {
+  const rc = e.target.closest('[data-reaktion-chart]');
+  if (rc) {
+    const box = el(`n-chart-${rc.dataset.reaktionChart}`);
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = '<p class="klein sekundaer">Lädt …</p>';
+    const d = await fetch(`/api/nachrichten/reaktion/${rc.dataset.reaktionChart}`).then((x) => x.json()).catch(() => ({ fehler: 'Der Server antwortet gerade nicht.' }));
+    box.innerHTML = d.fehler ? `<p class="klein minus">${esc(d.fehler)}</p>` : newsMiniChart(d);
+    return;
+  }
   const k = e.target.closest('[data-urteil]');
   if (!k) return;
   const story = Number(k.closest('[data-story]').dataset.story);
@@ -3191,6 +3231,16 @@ el('n-eingabe').addEventListener('submit', async (e) => {
   setTimeout(ladeNews, 1500); // die Verarbeitung (Sprachmodell) braucht einen Moment
 });
 
+let newsLueckenZeit = 0;
+async function newsLuecken() {
+  // Kurssprünge ohne passende Geschichte: einmal je 30 Minuten nachsehen (der Server lädt dafür Tageskurse)
+  if (Date.now() - newsLueckenZeit < 30 * 60e3) return;
+  newsLueckenZeit = Date.now();
+  const d = await fetch('/api/nachrichten/luecken').then((x) => x.json()).catch(() => null);
+  const liste = d && !d.fehler ? [...d.markt, ...d.werte] : [];
+  el('n-luecken').hidden = !liste.length;
+  el('n-luecken').innerHTML = liste.length ? `<b>Ohne erkannten Grund:</b> ${liste.map((l) => `${esc(l.wert)} <span class="${l.veraenderung >= 0 ? 'plus' : 'minus'}">${ggVz(l.veraenderung, gz1)} %</span> (${gz1.format(Math.abs(l.sigma))} σ) am ${datumDe(l.datum)}`).join(' · ')}<small> Kurssprünge über 2 Sigma, zu denen der Feed keine Geschichte hatte. Hinweis auf eine fehlende Quelle.</small>` : '';
+}
 async function ladeNews() {
   const pfad = `/api/nachrichten/geschichten?stunden=${feedStunden}`;
   delete antworten[pfad];
@@ -3202,7 +3252,9 @@ async function ladeNews() {
   el('n-quellen').innerHTML = ausfaelle.map((q) => `<span>${esc(q.name)}: ${esc(q.fehler_text || 'gestört')}</span>`).join('');
   const neu = d.alle.filter((s) => !newsGesehen.has(s.id)).length;
   el('n-status').textContent = [`${d.alle.length} Geschichten in ${d.stunden} Std.`, `${d.quellen.length} Quellen`,
-    !newsErsterAbruf && neu ? `${neu} neu` : '', `Stand ${uhrzeit.format(new Date(d.stand))} Uhr`, d.bewertungen ? `${d.bewertungen} Bewertungen von dir` : ''].filter(Boolean).join(' · ');
+    !newsErsterAbruf && neu ? `${neu} neu` : '', `Stand ${uhrzeit.format(new Date(d.stand))} Uhr`,
+    d.lernen?.aktiv ? `persönlich angepasst (${d.bewertungen} Bewertungen)` : (d.bewertungen ? `${d.bewertungen} von ${d.lernen?.ab ?? 30} Bewertungen bis zum Lernen` : '')].filter(Boolean).join(' · ');
+  newsLuecken();
   feedDaten = d;
   zeichneFeed();
   kachelWert('news', String(d.meine.length));
@@ -3212,9 +3264,89 @@ setInterval(() => { if (!document.hidden) ladeNews(); }, NEWS_TAKT);
 // ---- Reden & Zitate: Auftritte von Trump, Notenbankern, Ministern und Chefs ----
 let redenDaten = null;
 let redenKategorie = 'Alle';
-let newsAnsicht = 'ticker';
+// ---- News → Live: jede Meldung einzeln, streng nach Zeit (Terminal-Ticker) ----
+let liveDaten = null, liveFilter = 'alle';
+const liveGesehen = new Set();
+let liveErster = true;
+try { liveFilter = localStorage.getItem('newsLiveFilter') || 'alle'; } catch {}
+const LIVE_TAKT = 20 * 1000;
+const BEHOERDEN_QUELLEN = new Set(['Weißes Haus', 'Weißes Haus Erlasse', 'Fed', 'EZB', 'BLS', 'USTR', 'US-Finanzministerium']);
+const LIVE_FILTER = [
+  ['alle', 'Alle', () => true],
+  ['eil', 'Eilmeldungen', (m) => m.stufe === 2],
+  ['offiziell', 'Offiziell', (m) => BEHOERDEN_QUELLEN.has(m.quelle) || m.quelle.startsWith('SEC')],
+  ['firmen', 'Firmen', (m) => m.ticker.length > 0],
+  ['meine', 'Meine', (m) => m.positionen.length > 0],
+];
+const liveKurz = (q) => q.replace(/^Telegram @/, 'TG ').replace(/^Finnhub \((.+)\)$/, '$1').replace('Weißes Haus Erlasse', 'WH Erlass').replace('Weißes Haus', 'Weißes H.');
+
+function zeichneLive() {
+  const d = liveDaten;
+  if (!d) return;
+  const box = el('n-live-filter');
+  box.querySelectorAll('button').forEach((b) => {
+    const f = LIVE_FILTER.find((x) => x[0] === b.dataset.live);
+    b.querySelector('span').textContent = d.meldungen.filter(f[2]).length;
+    b.setAttribute('aria-pressed', String(b.dataset.live === liveFilter));
+  });
+  setzePille(box);
+  const pruefen = (LIVE_FILTER.find((x) => x[0] === liveFilter) ?? LIVE_FILTER[0])[2];
+  let tag = null;
+  const zeilen = d.meldungen.filter(pruefen).map((m) => {
+    const t = feedTag(m.zeit);
+    const kopf = t !== tag ? `<div class="n-l-tag">${esc(t)}</div>` : '';
+    tag = t;
+    const neu = !liveErster && !liveGesehen.has(m.id);
+    const wichtig = m.story_score >= 45 || m.eil;
+    const klassen = ['n-l-zeile', neu && 'neu', wichtig && 'wichtig', m.positionen.length && 'eigen', m.quelle.startsWith('Telegram') && 'tg'].filter(Boolean).join(' ');
+    const chips = [
+      ...m.positionen.map((p) => `<span class="n-chip eigen">${esc(p)}</span>`),
+      ...m.ticker.filter((x) => !m.positionen.includes(x)).slice(0, 3).map((x) => `<span class="n-chip">${esc(x)}</span>`),
+      m.story_anzahl > 1 ? `<button type="button" class="n-l-story" data-zur-story="${m.story}" title="Zur Geschichte mit allen Meldungen">${m.story_anzahl} Meldungen</button>` : '',
+      m.stufe === 2 && !m.bestaetigt && m.art !== 'manuell' ? '<span class="n-l-unb" title="Noch keine zweite Quelle">unbestätigt</span>' : '',
+    ].join('');
+    return `${kopf}<div class="${klassen}"><span class="n-zeit">${uhrzeit.format(new Date(m.zeit))}</span><span class="n-l-quelle" title="${esc(m.quelle)}">${esc(liveKurz(m.quelle))}</span>
+      <span class="n-l-titel">${sichererLink(m.link) ? `<a href="${esc(m.link)}" target="_blank" rel="noopener">${esc(m.titel)}</a>` : esc(m.titel)}${chips ? ` <span class="n-l-chips">${chips}</span>` : ''}</span></div>`;
+  });
+  el('n-live-liste').innerHTML = zeilen.join('') || '<p class="sekundaer n-leer">Keine Meldungen in diesem Filter.</p>';
+  d.meldungen.forEach((m) => liveGesehen.add(m.id));
+  liveErster = false;
+}
+
+async function ladeLive() {
+  const pfad = `/api/nachrichten/live?stunden=${feedStunden}`;
+  delete antworten[pfad];
+  let d;
+  try { d = await api(pfad); } catch { d = { fehler: 'Der Live-Ticker konnte nicht geladen werden. Läuft der Server noch?' }; }
+  if (d.fehler) { if (!liveDaten) el('n-live-status').textContent = d.fehler; return; }
+  const neu = liveErster ? 0 : d.meldungen.filter((m) => !liveGesehen.has(m.id)).length;
+  el('n-live-status').textContent = [`${d.meldungen.length} Meldungen in ${d.stunden} Std.`, neu ? `${neu} neu` : '', `Stand ${uhrzeit.format(new Date(d.stand))} Uhr, alle 20 Sekunden neu`].filter(Boolean).join(' · ');
+  liveDaten = d;
+  zeichneLive();
+}
+el('n-live-filter').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-live]');
+  if (!b) return;
+  liveFilter = b.dataset.live;
+  try { localStorage.setItem('newsLiveFilter', liveFilter); } catch {}
+  zeichneLive();
+});
+el('n-live-liste').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-zur-story]');
+  if (!b) return;
+  // Zur Geschichte springen: Ansicht wechseln, Bereich "Alle", Karte hervorheben
+  newsAnsicht = 'ticker'; feedBereich = 'alle';
+  try { localStorage.setItem('newsAnsicht', newsAnsicht); } catch {}
+  zeigeNewsAnsicht(); zeichneFeed();
+  const karte = document.querySelector(`.n-story[data-story="${b.dataset.zurStory}"]`);
+  if (karte) { karte.scrollIntoView({ block: 'center' }); karte.classList.add('markiert'); setTimeout(() => karte.classList.remove('markiert'), 2500); }
+});
+setInterval(() => { if (!document.hidden && newsAnsicht === 'live' && !el('seite-news').hidden) ladeLive(); }, LIVE_TAKT);
+
+let newsAnsicht = 'live';
 try {
-  if (localStorage.getItem('newsAnsicht') === 'reden') newsAnsicht = 'reden';
+  const gemerkt = localStorage.getItem('newsAnsicht');
+  if (['live', 'ticker', 'reden'].includes(gemerkt)) newsAnsicht = gemerkt;
   redenKategorie = localStorage.getItem('redenKategorie') || 'Alle';
 } catch {}
 const TENDENZ_TEXT = { straff: 'eher straff: spricht gegen Zinssenkungen', locker: 'eher locker: spricht für Zinssenkungen' };
@@ -3222,6 +3354,8 @@ const TENDENZ_TEXT = { straff: 'eher straff: spricht gegen Zinssenkungen', locke
 function zeigeNewsAnsicht() {
   el('n-ansicht').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ansicht === newsAnsicht)));
   el('n-teil-ticker').hidden = newsAnsicht !== 'ticker';
+  el('n-teil-live').hidden = newsAnsicht !== 'live';
+  if (newsAnsicht === 'live') ladeLive();
   el('n-teil-reden').hidden = newsAnsicht !== 'reden';
   if (newsAnsicht === 'reden') ladeReden();
 }
@@ -11837,6 +11971,7 @@ function zeichneStatus() {
     ...d.netz.filter((n) => n.fehler && (!n.letzter_ok || n.letzter_fehler > n.letzter_ok)).map((n) => `${n.quelle}: ${n.grund ?? 'Fehler'}`),
     ...d.handel.filter((h) => h.aktiv && h.fehler).map((h) => `${h.name}: ${h.fehler}`),
     ...(d.ki.an && d.ki.erreichbar === false ? [`KI (${d.ki.anbieter}) nicht erreichbar`] : []),
+    ...(d.newsfeed?.ausfaelle ?? []).map((a) => `Newsfeed ${a.quelle}: ${a.grund}`),
   ];
   const fehlendeKeys = d.keys.filter((k) => !k.gesetzt && /_KEY$|SEC_USER_AGENT/.test(k.name));
   const lage = probleme.length
@@ -11901,7 +12036,15 @@ function zeichneStatus() {
     ['Was hier steht', 'Die letzten 50 Fehlermeldungen von Jobs und Abrufen seit dem Start, neueste zuerst.'],
   ], d.fehler.length ? `<ul class="st-fehlerliste">${d.fehler.slice(0, 20).map((f) => `<li><span class="sekundaer">${new Date(f.zeit).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span> <b>${esc(f.quelle)}</b> ${esc(f.text)}</li>`).join('')}</ul>` : '<p class="sekundaer">Keine Fehler seit dem Start.</p>');
 
-  el('st-inhalt').innerHTML = `${ggLage(lage)}${system}${jobs}${netz}${handel}<div class="st-zwei">${ki}${keys}</div>${fehler}
+  const nf = d.newsfeed ?? {};
+  const news = ggKarte('st-news', 'Newsfeed-Quellen', [
+    ['Was hier steht', 'Für jede Geschichte mit mindestens zwei Quellen merkt sich Vinter, welche Quelle sie wann zuerst hatte (letzte 7 Tage). Zuerst = Anteil der Geschichten, bei denen die Quelle die schnellste war. Verzug = mittlere Verspätung gegenüber der schnellsten Quelle. Vollständigkeit = Anteil der wichtigen Geschichten (Score ab 40), die die Quelle überhaupt hatte.'],
+    ['Ausfall', 'Eine Quelle gilt als gestört bei drei Fehlern hintereinander oder wenn sie ungewöhnlich lange nichts Neues liefert (am Wochenende doppelt so lange erlaubt).'],
+    ['Lücken', 'Tage, an denen S&P 500 oder Nasdaq 100 sich um mehr als 2 Sigma bewegt haben, ohne dass der Feed eine wichtige Geschichte hatte.'],
+  ], nf.fehler ? ggFehler(nf) : `${(nf.ausfaelle ?? []).length ? `<p class="minus">${nf.ausfaelle.map((a) => `${esc(a.quelle)}: ${esc(a.grund)}`).join('<br>')}</p>` : '<p>' + stPunkt('gruen') + ' Keine Quelle gestört.</p>'}
+    ${(nf.quellen ?? []).length ? ggTabelle(['Quelle', 'Geschichten', 'Zuerst', 'Verzug', 'Vollständigkeit'], nf.quellen.map((q) => `<tr><td><b>${esc(q.quelle)}</b></td><td>${gz0.format(q.geschichten)}</td><td>${gz0.format(q.anteil_zuerst * 100)} %</td><td>${q.verzug_median_min < 1 ? 'unter 1 Min.' : `${gz1.format(q.verzug_median_min)} Min.`}</td><td>${q.vollstaendigkeit == null ? '–' : `${gz0.format(q.vollstaendigkeit * 100)} %`}</td></tr>`), 'st-tabelle') : '<p class="sekundaer">Noch zu wenige Geschichten mit mehreren Quellen.</p>'}
+    ${(nf.luecken ?? []).length ? `<p class="klein">Lücken: ${nf.luecken.map((l) => `${esc(l.wert)} ${ggVz(l.veraenderung, gz1)} % am ${datumDe(l.datum)}`).join(' · ')}</p>` : ''}`);
+  el('st-inhalt').innerHTML = `${ggLage(lage)}${system}${jobs}${netz}${news}${handel}<div class="st-zwei">${ki}${keys}</div>${fehler}
     <p class="klein sekundaer">Stand ${new Date(d.stand).toLocaleTimeString('de-DE')} · aktualisiert sich alle 30 Sekunden</p>`;
 }
 
