@@ -3058,17 +3058,23 @@ el('w-liste').addEventListener('click', (e) => {
   if (knopf) watchSenden('DELETE', `/api/watchlist/${encodeURIComponent(knopf.dataset.ticker)}`);
 });
 
-// ---- Live-Newsfeed ----
-// Merkt sich, was schon zu sehen war. Alles andere bekommt beim nächsten Abruf eine grüne Uhrzeit.
-let newsBekannt = null;
-const newsNeu = new Set();
+// ---- Newsfeed (Neuaufbau ab 24.11.2026): Geschichten statt Einzelmeldungen, app/markt/nachrichten + app/nutzer/nachrichten.py ----
 let feedDaten = null;
-let feedFilter = 'Alle';
-try { feedFilter = localStorage.getItem('newsFilter') || 'Alle'; } catch {}
-const NEWS_TAKT = 90 * 1000;
+const newsGesehen = new Set();   // Geschichten, die schon zu sehen waren (alles andere ist "neu")
+let newsErsterAbruf = true;
+let feedBereich = 'markt', feedStunden = 24;
+try { feedBereich = localStorage.getItem('newsBereich') || 'markt'; feedStunden = Number(localStorage.getItem('newsStunden')) || 24; } catch {}
+const NEWS_TAKT = 60 * 1000;
 const tagName = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
-
-const passtFilter = (m) => feedFilter === 'Alle' || (feedFilter === 'Wichtig' ? m.wichtig : m.tags.includes(feedFilter));
+const NEWS_TYP = {
+  zoelle_handel: 'Zölle & Handel', notenbank: 'Notenbank', konjunktur: 'Konjunkturdaten', geopolitik: 'Geopolitik',
+  uebernahme: 'Übernahme', insolvenz: 'Insolvenz', prognose: 'Prognose', geschaeftszahlen: 'Geschäftszahlen',
+  bilanzproblem: 'Bilanzproblem', regulierung: 'Regulierung', schulden: 'Schulden', rechtsstreit: 'Rechtsstreit',
+  personalien: 'Personalien', rating: 'Analysten', abschreibung: 'Abschreibung', umbau: 'Umbau', vertrag: 'Vertrag',
+  kapitalmassnahme: 'Kapitalmaßnahme', finanzierung: 'Finanzierung', mitteilung: 'Mitteilung', boersennotierung: 'Börsennotierung',
+  pflichtmeldung: 'Pflichtmeldung', sonstiges: 'Sonstiges',
+};
+const NEWS_BEREICHE = [['markt', 'Markt bewegend'], ['meine', 'Meine Positionen'], ['alle', 'Alle'], ['aus', 'Ausgefiltert']];
 
 function feedTag(iso) {
   const d = new Date(iso);
@@ -3078,86 +3084,129 @@ function feedTag(iso) {
   if (isoLokal(d) === isoLokal(gestern)) return 'Gestern';
   return tagName.format(d);
 }
+const newsSeit = (iso) => {
+  const min = Math.round((Date.now() - new Date(iso)) / 60000);
+  return min < 1 ? 'gerade eben' : min < 60 ? `vor ${min} Min.` : min < 24 * 60 ? `vor ${Math.round(min / 60)} Std.` : feedTag(iso);
+};
+const newsLink = (titel, link) => (sichererLink(link) ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(titel)}</a>` : esc(titel));
+const newsTelegram = (q) => q.startsWith('Telegram');
 
-function feedZeile(m) {
-  const klassen = ['n-zeile', m.wichtig && 'wichtig', m.positionen && 'eigen', m.thesen && 'these', newsNeu.has(m.titel) && 'neu'].filter(Boolean).join(' ');
-  const bezug = [...(m.positionen ?? []), ...(m.thesen ?? []).map((t) => `These: ${t}`)];
-  const tags = m.tags.filter((t) => t !== 'Meine Positionen');
-  const unter = [m.quellen.join(', '), ...tags].map(esc).join(' · ');
-  const inhalt = `<span class="n-zeit">${uhrzeit.format(new Date(m.zeit))}</span>
-    <span><span class="n-titel">${m.wichtig ? '<span class="n-wichtig">Wichtig</span>' : ''}${esc(m.titel)}</span>
-    <span class="n-unter">${bezug.length ? `<b>${esc(bezug.join(', '))}</b> · ` : ''}${unter}</span></span>`;
-  return sichererLink(m.link)
-    ? `<a class="${klassen}" href="${esc(m.link)}" target="_blank" rel="noopener">${inhalt}</a>`
-    : `<div class="${klassen}">${inhalt}</div>`;
+function newsStory(s) {
+  const erste = s.meldungen[0];
+  const squawk = s.meldungen.every((m) => m.stufe === 2);
+  const status = s.bestaetigt
+    ? `<span class="n-s-ok">${s.quellen.length > 1 ? `bestätigt · ${s.quellen.length} Quellen` : 'Originalquelle'}</span>`
+    : (squawk ? '<span class="n-s-squawk" title="Schnelle Eilmeldung, noch keine zweite Quelle">Squawk, unbestätigt</span>' : '');
+  const text = s.meldungen.find((m) => m.text)?.text;
+  const bezug = [
+    ...s.positionen.map((p) => `<span class="n-chip eigen" title="${esc(p.quelle)}">${esc(p.ticker || p.name)}</span>`),
+    ...s.thesen.map((t) => `<span class="n-chip these" title="Thesen-Thema">${esc(t)}</span>`),
+    ...s.ticker.filter((t) => !s.positionen.some((p) => p.ticker === t)).slice(0, 6).map((t) => `<span class="n-chip">${esc(t)}</span>`),
+  ].join('');
+  const extra = [...s.laender, ...s.stellen].slice(0, 6).join(' · ');
+  const zeile = (m) => `<li><span class="n-zeit">${uhrzeit.format(new Date(m.gesehen))}</span><span class="n-s-quelle${newsTelegram(m.quelle) ? ' tg' : ''}">${esc(m.quelle)}</span> ${newsLink(m.titel, m.link)}</li>`;
+  const strahl = s.meldungen.length > 1
+    ? `<ol class="n-s-strahl">${s.meldungen.slice(0, 3).map(zeile).join('')}</ol>${s.meldungen.length > 3 ? `<details class="n-s-mehr"><summary>${s.meldungen.length - 3} weitere Meldungen</summary><ol class="n-s-strahl">${s.meldungen.slice(3).map(zeile).join('')}</ol></details>` : ''}`
+    : `<p class="n-s-einzel"><span class="n-s-quelle${newsTelegram(erste.quelle) ? ' tg' : ''}">${esc(erste.quelle)}</span>${sichererLink(erste.link) ? ` · <a href="${esc(erste.link)}" target="_blank" rel="noopener">Original ↗</a>` : ''}</p>`;
+  const neu = !newsErsterAbruf && !newsGesehen.has(s.id);
+  return `<article class="karte n-story${s.eil ? ' eil' : ''}${neu ? ' neu' : ''}${s.positionen.length ? ' eigen' : ''}" data-story="${s.id}">
+    <div class="n-s-kopf"><span class="n-zeit" title="zuerst gesehen ${esc(new Date(s.erstes).toLocaleString('de-DE'))}">${uhrzeit.format(new Date(s.erstes))}</span>
+      <span class="n-s-typ">${esc(NEWS_TYP[s.ereignis] ?? s.ereignis)}</span>${status}
+      <span class="n-s-score" title="Wichtigkeit 0–100 (Ereignistyp, Quellen, Wachstum, Stellen und Personen)">${gz0.format(s.score)}</span></div>
+    <h3 class="n-s-titel">${newsLink(s.titel, s.meldungen.find((m) => m.titel === s.titel)?.link ?? erste.link)}</h3>
+    ${text && text !== s.titel ? `<p class="n-s-text">${esc(text.slice(0, 280))}${text.length > 280 ? ' …' : ''}</p>` : ''}
+    ${bezug || extra ? `<p class="n-s-bezug">${bezug}${extra ? `<span class="n-s-extra">${esc(extra)}</span>` : ''}</p>` : ''}
+    ${strahl}
+    <div class="n-s-fuss"><span class="sekundaer">${s.anzahl} ${s.anzahl === 1 ? 'Meldung' : 'Meldungen'} · zuletzt ${newsSeit(s.letztes)}</span>
+      <span class="n-s-urteil" role="group" aria-label="Bewerten">${[['wichtig', 'Wichtig'], ['unwichtig', 'Unwichtig'], ['werbung', 'Werbung']].map(([u, n]) => `<button type="button" class="knopf ca-mini" data-urteil="${u}">${n}</button>`).join('')}</span></div>
+  </article>`;
+}
+
+function newsEilmeldung(d) {
+  // Eilmeldung: schnell wachsende oder als Eilmeldung formulierte, wichtige Geschichte der letzten 30 Minuten
+  const kandidat = d.markt.find((s) => s.score >= 50 && (Date.now() - new Date(s.letztes)) < 30 * 60000 && (s.eil || s.anzahl >= 3));
+  el('n-eil').hidden = !kandidat;
+  if (kandidat) el('n-eil').innerHTML = `<span class="n-eil-zeichen">Eilmeldung</span> ${esc(kandidat.titel)} <span class="sekundaer">· ${kandidat.anzahl} Meldungen, ${newsSeit(kandidat.erstes)}</span>`;
 }
 
 function zeichneFeed() {
-  if (!feedDaten) return;
-  const alle = feedDaten.meldungen;
-  const anzahl = (tag) => alle.filter((m) => (tag === 'Wichtig' ? m.wichtig : m.tags.includes(tag))).length;
-  if (feedFilter !== 'Alle' && !feedDaten.tags.includes(feedFilter)) feedFilter = 'Alle';
-  // Die Knöpfe nur einmal bauen: Neu geschriebenes HTML würde die gleitende Pille darunter entfernen.
-  const box = el('n-tags');
-  const namen = ['Alle', ...feedDaten.tags];
-  if (box.dataset.tags !== namen.join('|')) {
-    box.querySelectorAll('button').forEach((b) => b.remove());
-    box.insertAdjacentHTML('beforeend', namen.map((t) => `<button type="button" data-tag="${esc(t)}" aria-pressed="false">${esc(t)}<span></span></button>`).join(''));
-    box.dataset.tags = namen.join('|');
-  }
+  const d = feedDaten;
+  if (!d) return;
+  const box = el('n-bereich');
   box.querySelectorAll('button').forEach((b) => {
-    b.querySelector('span').textContent = b.dataset.tag === 'Alle' ? alle.length : anzahl(b.dataset.tag);
-    b.setAttribute('aria-pressed', String(b.dataset.tag === feedFilter)); // verschiebt die Pille
+    const n = b.dataset.bereich === 'aus' ? d.ausgefiltert.length : (d[b.dataset.bereich] ?? []).length;
+    b.querySelector('span').textContent = n;
+    b.setAttribute('aria-pressed', String(b.dataset.bereich === feedBereich));
   });
   setzePille(box);
-
-  const liste = alle.filter(passtFilter);
-  let tag = null;
-  const zeilen = liste.map((m) => {
-    const t = feedTag(m.zeit);
-    const kopfzeile = t !== tag ? `<h2 class="n-tag">${esc(t)}</h2>` : '';
-    tag = t;
-    return kopfzeile + feedZeile(m);
-  });
-  el('n-liste').hidden = false;
-  el('n-liste').innerHTML = zeilen.join('') || '<p class="n-leer">Zu diesem Filter gibt es gerade keine Meldungen.</p>';
+  el('n-zeitraum').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.stunden) === feedStunden)));
+  setzePille(el('n-zeitraum'));
+  newsEilmeldung(d);
+  if (feedBereich === 'aus') {
+    el('n-liste').innerHTML = `<section class="karte n-aus"><p class="sekundaer">Diese Meldungen hat Vinter aussortiert (nicht gelöscht). Etwas Wichtiges dabei? Dann passt eine Regel nicht: daten/markt/news_begriffe.yaml.</p>
+      ${d.ausgefiltert.map((m) => `<div class="n-aus-zeile"><span class="n-zeit">${uhrzeit.format(new Date(m.gesehen))}</span><span class="n-s-quelle">${esc(m.quelle)}</span><span>${newsLink(m.titel, m.link)}<small>${esc(m.filter)}</small></span></div>`).join('') || '<p>Nichts aussortiert.</p>'}</section>`;
+    return;
+  }
+  const liste = d[feedBereich] ?? [];
+  el('n-liste').innerHTML = liste.map(newsStory).join('')
+    || `<p class="sekundaer n-leer">${feedBereich === 'meine' ? 'Gerade nichts zu deinen Positionen, Watchlist-Werten oder Thesen-Themen.' : 'Gerade keine Geschichten in diesem Bereich.'}</p>`;
+  liste.forEach((s) => newsGesehen.add(s.id));
+  newsErsterAbruf = false;
 }
-el('n-tags').addEventListener('click', (e) => {
-  const knopf = e.target.closest('button');
-  if (!knopf) return;
-  feedFilter = knopf.dataset.tag;
-  try { localStorage.setItem('newsFilter', feedFilter); } catch {}
+
+el('n-bereich').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-bereich]');
+  if (!b) return;
+  feedBereich = b.dataset.bereich;
+  try { localStorage.setItem('newsBereich', feedBereich); } catch {}
   zeichneFeed();
+});
+el('n-zeitraum').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-stunden]');
+  if (!b) return;
+  feedStunden = Number(b.dataset.stunden);
+  try { localStorage.setItem('newsStunden', String(feedStunden)); } catch {}
+  ladeNews();
+});
+el('n-liste').addEventListener('click', async (e) => {
+  const k = e.target.closest('[data-urteil]');
+  if (!k) return;
+  const story = Number(k.closest('[data-story]').dataset.story);
+  const r = await fetch('/api/nachrichten/bewertung', { method: 'POST', headers: { 'content-type': 'application/json', 'x-vinter': 'nachrichten' }, body: JSON.stringify({ story, urteil: k.dataset.urteil }) })
+    .then((x) => x.json()).catch(() => ({ fehler: 'Der Server antwortet gerade nicht.' }));
+  if (r.fehler) { alert(r.fehler); return; }
+  k.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === k)));
+  if (feedDaten) feedDaten.bewertungen = r.bewertungen;
+});
+el('n-eingabe').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target, text = f.text.value.trim();
+  if (!text) return;
+  f.querySelector('button').disabled = true;
+  const r = await fetch('/api/nachrichten/eingang/tool', { method: 'POST', headers: { 'content-type': 'application/json', 'x-vinter': 'nachrichten' }, body: JSON.stringify({ text }) })
+    .then((x) => x.json()).catch(() => ({ fehler: 'Der Server antwortet gerade nicht.' }));
+  f.querySelector('button').disabled = false;
+  if (r.fehler) { alert(r.fehler); return; }
+  f.reset();
+  setTimeout(ladeNews, 1500); // die Verarbeitung (Sprachmodell) braucht einen Moment
 });
 
 async function ladeNews() {
-  delete antworten['/api/newsfeed'];
+  const pfad = `/api/nachrichten/geschichten?stunden=${feedStunden}`;
+  delete antworten[pfad];
   let d;
-  try {
-    d = await api('/api/newsfeed');
-  } catch {
-    d = { fehler: 'Die News konnten nicht geladen werden. Läuft der Server noch?' };
-  }
-  if (d.fehler) {
-    if (!newsBekannt) el('n-status').textContent = d.fehler; // sonst bleibt der letzte Stand stehen
-    return;
-  }
-  if (newsBekannt) d.meldungen.filter((m) => !newsBekannt.has(m.titel)).forEach((m) => newsNeu.add(m.titel));
-  newsBekannt = new Set([...(newsBekannt ?? []), ...d.meldungen.map((m) => m.titel)]);
-
-  const anzahlNeu = d.meldungen.filter((m) => newsNeu.has(m.titel)).length;
-  el('n-status').textContent = [`${d.meldungen.length} Meldungen`, `aktualisiert ${zeitText(d.aktualisiert)} Uhr`, anzahlNeu ? `${anzahlNeu} neu` : ''].filter(Boolean).join(' · ');
-  const ausfaelle = d.quellen.filter((q) => q.fehler);
+  try { d = await api(pfad); } catch { d = { fehler: 'Die News konnten nicht geladen werden. Läuft der Server noch?' }; }
+  if (d.fehler) { if (!feedDaten) el('n-status').textContent = d.fehler; return; }
+  const ausfaelle = d.quellen.filter((q) => q.fehler_serie >= 3);
   el('n-quellen').hidden = !ausfaelle.length;
-  // Quellen mit demselben Grund in einen Hinweis, z. B. alle, denen dieselbe Angabe in .env fehlt.
-  const gruende = new Map();
-  ausfaelle.forEach((q) => gruende.set(q.fehler, [...(gruende.get(q.fehler) ?? []), q]));
-  el('n-quellen').innerHTML = [...gruende].map(([grund, qs]) => `<span>${esc(qs.map((q) => q.name).join(', '))}: ${esc(grund)}</span>`).join('');
+  el('n-quellen').innerHTML = ausfaelle.map((q) => `<span>${esc(q.name)}: ${esc(q.fehler_text || 'gestört')}</span>`).join('');
+  const neu = d.alle.filter((s) => !newsGesehen.has(s.id)).length;
+  el('n-status').textContent = [`${d.alle.length} Geschichten in ${d.stunden} Std.`, `${d.quellen.length} Quellen`,
+    !newsErsterAbruf && neu ? `${neu} neu` : '', `Stand ${uhrzeit.format(new Date(d.stand))} Uhr`, d.bewertungen ? `${d.bewertungen} Bewertungen von dir` : ''].filter(Boolean).join(' · ');
   feedDaten = d;
   zeichneFeed();
-  kachelWert('news', String(d.meldungen.filter((m) => m.wichtig || m.positionen).length));
+  kachelWert('news', String(d.meine.length));
 }
-// Der Server fragt jede Quelle nur so oft ab, wie in news_quellen.yaml steht.
 setInterval(() => { if (!document.hidden) ladeNews(); }, NEWS_TAKT);
 
 // ---- Reden & Zitate: Auftritte von Trump, Notenbankern, Ministern und Chefs ----
@@ -7459,9 +7508,14 @@ const KACHELN = {
   news: {
     titel: 'Newsfeed', ziel: '#news', min: [4, 3], std: [4, 4],
     async zeige(box, w, h) {
-      const d = await tafelApi('/api/newsfeed');
-      const m = d.meldungen.slice(0, tafelZeilen(h, 26));
-      box.innerHTML = `<div class="tf-liste tf-news">${m.map((x) => `<div class="${x.wichtig ? 'tf-eigen' : ''}"><em>${tafelZeit(x.zeit)}</em><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.titel)}</a></div>`).join('')}</div>`;
+      const d = await tafelApi('/api/nachrichten/geschichten?stunden=24');
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const eigen = new Set(d.meine.map((s) => s.id));
+      const m = [...d.markt, ...d.meine.filter((s) => !d.markt.some((x) => x.id === s.id))].sort((a, b) => b.rang - a.rang).slice(0, tafelZeilen(h, 26));
+      box.innerHTML = m.length ? `<div class="tf-liste tf-news">${m.map((s) => {
+        const link = (s.meldungen.find((x) => x.titel === s.titel) ?? s.meldungen[0]).link;
+        return `<div class="${eigen.has(s.id) ? 'tf-eigen' : ''}"><em>${tafelZeit(s.erstes)}</em>${sichererLink(link) ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(s.titel)}</a>` : `<span>${esc(s.titel)}</span>`}</div>`;
+      }).join('')}</div>` : '<p class="tf-unter">Gerade keine wichtigen Geschichten.</p>';
     },
   },
   freibetrag: {
@@ -10404,7 +10458,72 @@ const einZeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-
 async function ladeEinstellungen() {
   einStatus = await fetch('/api/konto/status').then((r) => r.json()).catch(() => null);
   einVerw = einStatus?.rolle === 'admin' ? await fetch('/api/verwaltung').then((r) => r.json()).catch(() => null) : null;
+  einTg = einStatus?.rolle === 'admin' ? await fetch('/api/nachrichten/telegram').then((r) => r.json()).catch(() => null) : null;
+  const tok = await fetch('/api/nachrichten/token').then((r) => r.json()).catch(() => ({}));
+  einToken = { ...einToken, vorhanden: !!tok.vorhanden };
   zeichneEinstellungen();
+}
+let einTg = null, einToken = { vorhanden: false, neu: '' };
+const tgSenden = (schritt, daten) => fetch(`/api/nachrichten/telegram/${schritt}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-vinter': 'telegram' }, body: JSON.stringify(daten ?? {}) })
+  .then(async (r) => r.json().catch(() => ({ fehler: 'Unerwartete Antwort.' }))).catch(() => ({ fehler: 'Der Server antwortet gerade nicht.' }));
+
+// Telegram-Anmeldung (nur Admin): Nummer → Code → ggf. Cloud-Passwort
+function einTelegramKarte() {
+  const g = einTg;
+  const info = [
+    ['Was es macht', 'Vinter liest öffentliche Telegram-Kanäle (Start: @WalterBloomberg) in Echtzeit mit und nimmt sie in den Newsfeed auf. Nur lesen: Vinter schreibt und postet nie etwas. Weitere Kanäle stehen in daten/markt/news_quellen.yaml unter telegram: kanaele.'],
+    ['Datenschutz', 'Der Code und ein Cloud-Passwort werden nur zum Anmelden durchgereicht und nie gespeichert. Gespeichert wird nur die Sitzung, verschlüsselt im Datenordner (konten/keys.enc). Sie kommt nie ins Repo und nicht in die Umzugsdatei; am NUC meldest du dich einmal neu an. Telegram-Meldungen sieht nur dein Konto, Freunde nicht.'],
+    ['Abmelden', 'Beendet die Sitzung auch bei Telegram (sie verschwindet aus „Geräte“ in der Telegram-App).'],
+  ];
+  if (!g) return ggKarte('ein-telegram', 'Telegram', info, ggFehler({ fehler: 'Der Telegram-Status konnte nicht geladen werden.' }));
+  let inhalt;
+  if (!g.api) {
+    inhalt = '<p>Zuerst oben unter „Keys und Einstellungen“ <code>TELEGRAM_API_ID</code> und <code>TELEGRAM_API_HASH</code> eintragen (my.telegram.org → API development tools).</p>';
+  } else if (g.angemeldet) {
+    inhalt = `<p>${g.verbunden ? `<span class="v-live">Live</span> Verbunden als <b>${esc(g.konto || 'Telegram-Konto')}</b>` : '<b class="minus">Nicht verbunden</b>'}${g.fehler ? ` · <span class="minus">${esc(g.fehler)}</span>` : ''}</p>
+      <p class="klein sekundaer">Kanäle: ${g.kanaele.map((k) => `@${esc(k)}`).join(', ') || 'keine'}</p>
+      <div class="ein-knoepfe"><button class="knopf" type="button" data-ein="tg-abmelden">Bei Telegram abmelden</button></div>`;
+  } else if (g.wartet_auf === 'code') {
+    inhalt = `<form class="ein-form" id="ein-tg-code"><p>Telegram hat dir einen Code geschickt (meist in der Telegram-App, nicht per SMS).</p>
+      <label class="feld"><span>Code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+      <button class="knopf primaer" type="submit">Anmelden</button><p class="klein" id="ein-tg-meldung" role="status"></p></form>`;
+  } else if (g.wartet_auf === 'passwort') {
+    inhalt = `<form class="ein-form" id="ein-tg-pw"><p>Dein Telegram-Konto hat ein Cloud-Passwort (zweistufige Bestätigung).</p>
+      <label class="feld"><span>Cloud-Passwort</span><input type="password" name="passwort" autocomplete="current-password" required></label>
+      <button class="knopf primaer" type="submit">Anmelden</button><p class="klein" id="ein-tg-meldung" role="status"></p></form>`;
+  } else {
+    inhalt = `<form class="ein-form" id="ein-tg-telefon"><p>Mit deinem Telegram-Konto anmelden, damit Vinter die Kanäle mitlesen kann.</p>
+      <label class="feld"><span>Telefonnummer mit Ländervorwahl</span><input name="telefon" type="tel" autocomplete="tel" placeholder="+49 170 1234567" required></label>
+      <button class="knopf primaer" type="submit">Code anfordern</button><p class="klein" id="ein-tg-meldung" role="status"></p></form>${g.fehler ? `<p class="klein minus">${esc(g.fehler)}</p>` : ''}`;
+  }
+  return ggKarte('ein-telegram', 'Telegram', info, inhalt);
+}
+
+// Eigene Meldungen an den Newsfeed schicken: Token für den iOS-Kurzbefehl
+function einEingangKarte() {
+  const gesetzt = einVerw?.einstellungen?.find((e) => e.name === 'VINTER_ADRESSE')?.wert;
+  const lokal = einStatus?.modus === 'lokal';
+  const ziel = `${(gesetzt || (lokal ? 'http://<Tailscale-Name-des-NUC>:8099' : location.origin)).replace(/\/$/, '')}/api/nachrichten/eingang`;
+  return ggKarte('ein-eingang', 'Meldungen vom iPhone an Vinter schicken', [
+    ['Wozu', 'Eine Nachricht oder einen Link, den du irgendwo liest (X, Telegram, eine Nachrichten-App), über das Teilen-Menü direkt in deinen Vinter-Newsfeed schicken. Er erscheint dort als „von mir“ und wird wie jede andere Meldung einer Geschichte zugeordnet.'],
+    ['Sicherheit', 'Der Kurzbefehl meldet sich mit einem persönlichen Token an, nicht mit deinem Passwort. Vinter speichert nur eine Prüfsumme davon. Ein neuer Token macht den alten ungültig. Tokens ziehen beim Umzug nicht mit.'],
+    ['Adresse', 'Die Tailscale-Adresse des NUC funktioniert unterwegs und zu Hause, solange Tailscale auf dem iPhone an ist. Eine zweite Adresse für zu Hause ist nicht nötig. Trag sie unter Keys als VINTER_ADRESSE ein, dann steht sie unten in der Anleitung.'],
+  ], `${lokal ? '<p class="gold">Gerade läuft Vinter im lokalen Modus auf deinem PC und ist vom iPhone aus nicht erreichbar. Richte den Kurzbefehl ein, sobald Vinter auf dem NUC läuft, und erzeuge den Token dort.</p>' : ''}
+    ${einToken.neu ? `<div class="ein-link"><p>Dein Token (wird nur jetzt angezeigt):</p>
+      <div class="ein-link-zeile"><input type="text" readonly value="${esc(einToken.neu)}" id="ein-token-feld" aria-label="Token"><button class="knopf" type="button" data-ein="token-kopieren">Kopieren</button></div></div>`
+    : `<p>${einToken.vorhanden ? 'Ein Token ist eingerichtet.' : 'Noch kein Token eingerichtet.'}</p>`}
+    <div class="ein-knoepfe"><button class="knopf${einToken.vorhanden ? '' : ' primaer'}" type="button" data-ein="token-neu">${einToken.vorhanden ? 'Neuen Token erzeugen' : 'Token erzeugen'}</button></div>
+    <h3>Kurzbefehl einrichten (einmalig, etwa 5 Minuten)</h3>
+    <ol class="ein-schritte">
+      <li>App <b>Kurzbefehle</b> öffnen → oben rechts <b>+</b>. Oben auf den Namen tippen → <b>Umbenennen</b> → <b>An Vinter</b>.</li>
+      <li>Oben auf den Namen tippen → <b>Details</b> (oder unten das <b>i</b>) → <b>Im Share-Sheet anzeigen</b> einschalten → <b>Fertig</b>. Oben steht jetzt „Empfangen <b>Beliebig</b> Eingabe von Share-Sheet“. Daran nichts ändern.</li>
+      <li>Unten ins Suchfeld <b>URL abrufen</b> tippen und <b>Inhalte von URL abrufen</b> antippen.</li>
+      <li>Steht in der Aktion schon „Kurzbefehl-Eingabe“ als URL: antippen, löschen und stattdessen eintragen: <code>${esc(ziel)}</code></li>
+      <li>In der Aktion auf den Pfeil <b>›</b> tippen. <b>Methode</b>: <b>POST</b>. <b>Header</b> → „Neuer Header hinzufügen“: Schlüssel <code>Authorization</code>, Wert <code>Bearer </code> (mit Leerzeichen) und direkt dahinter dein Token.</li>
+      <li><b>Anfragetext</b>: <b>JSON</b> → „Neues Feld hinzufügen“ → <b>Text</b>. Schlüssel <code>text</code>. Beim Wert ins Feld tippen und oben über der Tastatur <b>Kurzbefehl-Eingabe</b> wählen (es erscheint ein blaues Kästchen).</li>
+      <li>Optional: Aktion <b>Mitteilung zeigen</b> mit „An Vinter geschickt“. Oben rechts <b>Fertig</b>.</li>
+      <li>Testen: in Safari oder einer App <b>Teilen</b> → <b>An Vinter</b>. Die Meldung steht danach auf der News-Seite (Bereich „Alle“).</li>
+    </ol>`);
 }
 
 function zeichneEinstellungen() {
@@ -10423,7 +10542,7 @@ function zeichneEinstellungen() {
         <label class="feld"><span>Neues Passwort (mindestens 10 Zeichen)</span><input type="password" name="neu" autocomplete="new-password" required></label>
         <label class="feld"><span>Neues Passwort wiederholen</span><input type="password" name="wdh" autocomplete="new-password" required></label>
         <button class="knopf primaer" type="submit">Passwort ändern</button><p class="klein" id="ein-pw-meldung" role="status"></p></form>`);
-  if (s.rolle !== 'admin' || !v) { el('ein-inhalt').innerHTML = konto; return; }
+  if (s.rolle !== 'admin' || !v) { el('ein-inhalt').innerHTML = konto + einEingangKarte(); return; }
 
   const freunde = ggKarte('ein-freunde', 'Freunde', [
     ['Einladen', 'Ein Einladungslink gilt 7 Tage und nur einmal. Der Freund legt Name und Passwort selbst fest, du kennst es nie. Er bekommt einen eigenen Datenbereich: eigenes Depot (eigener Trade-Republic-Export), Watchlist, Thesen, Alarme. Marktdaten teilt ihr euch.'],
@@ -10470,7 +10589,7 @@ function zeichneEinstellungen() {
       <li><b>Handy:</b> Im Browser „Zum Home-Bildschirm“ wählen, dann startet Vinter wie eine App.</li>
     </ol>
     <p class="klein sekundaer">Beispiel für die Tailscale-Zugriffsregel (ACL), Freunde nur auf Port 8099 des NUC: <code>{"action": "accept", "src": ["autogroup:shared"], "dst": ["homeassistant:8099"]}</code></p>`);
-  el('ein-inhalt').innerHTML = konto + freunde + keys + umzug + anleitung;
+  el('ein-inhalt').innerHTML = konto + freunde + keys + einTelegramKarte() + einEingangKarte() + umzug + anleitung;
 }
 
 el('seite-einstellungen').addEventListener('click', async (e) => {
@@ -10478,6 +10597,27 @@ el('seite-einstellungen').addEventListener('click', async (e) => {
   if (k?.dataset.ein === 'abmelden' || k?.dataset.ein === 'ueberall') {
     await einSenden('/api/konto/abmelden', 'POST', { ueberall: k.dataset.ein === 'ueberall' });
     location.href = '/anmelden';
+    return;
+  }
+  if (k?.dataset.ein === 'tg-abmelden') {
+    if (!confirm('Bei Telegram abmelden? Vinter liest danach keine Kanäle mehr, bis du dich neu anmeldest.')) return;
+    const r = await tgSenden('abmelden');
+    if (r.fehler) alert(r.fehler); else einTg = r;
+    zeichneEinstellungen();
+    return;
+  }
+  if (k?.dataset.ein === 'token-neu') {
+    if (einToken.vorhanden && !confirm('Neuen Token erzeugen? Der bisherige funktioniert danach nicht mehr (Kurzbefehl anpassen).')) return;
+    const r = await fetch('/api/nachrichten/token', { method: 'POST', headers: { 'x-vinter': 'nachrichten' } }).then((x) => x.json()).catch(() => ({ fehler: 'Der Server antwortet gerade nicht.' }));
+    if (r.fehler) { alert(r.fehler); return; }
+    einToken = { vorhanden: true, neu: r.token };
+    zeichneEinstellungen();
+    el('ein-eingang')?.scrollIntoView({ block: 'start' });
+    return;
+  }
+  if (k?.dataset.ein === 'token-kopieren') {
+    const f = el('ein-token-feld'); f.select();
+    try { await navigator.clipboard.writeText(f.value); k.textContent = 'Kopiert'; } catch { document.execCommand('copy'); k.textContent = 'Kopiert'; }
     return;
   }
   if (k?.dataset.ein === 'kopieren') {
@@ -10528,6 +10668,19 @@ el('seite-einstellungen').addEventListener('submit', async (e) => {
     f.querySelector('button').disabled = false;
     m.textContent = r.fehler ? r.fehler
       : `Fertig: ${r.neu} Dateien neu, ${r.ersetzt} ersetzt, ${r.gleich} unverändert; ${r.datenbanken} Datenbanken mit ${r.zeilen_neu.toLocaleString('de-DE')} neuen Einträgen.${r.sicherung ? ` Alte Fassungen liegen in umzug/${r.sicherung}.` : ''} Seite neu laden, um alles zu sehen.`;
+    return;
+  }
+  if (['ein-tg-telefon', 'ein-tg-code', 'ein-tg-pw'].includes(f.id)) {
+    const d = Object.fromEntries(new FormData(f));
+    const schritt = { 'ein-tg-telefon': 'telefon', 'ein-tg-code': 'code', 'ein-tg-pw': 'passwort' }[f.id];
+    el('ein-tg-meldung').textContent = 'Einen Moment …';
+    f.querySelector('button').disabled = true;
+    const r = await tgSenden(schritt, d);
+    f.querySelector('button').disabled = false;
+    if (r.fehler) { el('ein-tg-meldung').textContent = r.fehler; return; }
+    einTg = r;
+    zeichneEinstellungen();
+    el('ein-telegram')?.scrollIntoView({ block: 'start' });
     return;
   }
   if (f.id === 'ein-pw') {

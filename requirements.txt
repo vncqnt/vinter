@@ -16,3 +16,4 @@ exchange_calendars==4.13.2
 openpyxl==3.1.5
 cryptography==50.0.2
 tzdata==2026.6
+telethon==1.46.0

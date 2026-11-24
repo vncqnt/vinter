@@ -17,7 +17,6 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 
 from ..cache import markt_lesen as cache_lesen, markt_schreiben as cache_schreiben
-from . import squawk
 
 PAUSE = timedelta(minutes=60)       # längere Pause = neuer Auftritt
 LIVE = timedelta(minutes=20)        # so frisch muss das letzte Zitat sein, damit "LIVE" dasteht
@@ -118,7 +117,8 @@ def auftritte() -> dict:
     alt, alter = cache_lesen("zitate:auftritte2")
     if alt and alter < GUELTIG:
         return alt
-    daten = squawk.feed()
+    from .nachrichten import kompatibel
+    daten = {"meldungen": kompatibel.meldungen(72)}
     zitate = []
     for m in daten["meldungen"]:
         treffer = _ZITAT.match(m["titel"])

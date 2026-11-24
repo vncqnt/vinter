@@ -1,0 +1,132 @@
+# Begriffe für die Auswertung der Schlagzeilen im Newsfeed (Extraktion).
+# Du kannst alles ergänzen. Groß-/Kleinschreibung ist egal, außer bei "firmen_aliase" (dort wie geschrieben).
+# Änderungen gelten ab der nächsten Meldung.
+
+# Zusätzliche Firmennamen → Ticker (S&P 500 und Nasdaq 100 erkennt Vinter von selbst)
+firmen_aliase:
+  Google: GOOGL
+  Alphabet: GOOGL
+  Facebook: META
+  Nvidia: NVDA
+  NVIDIA: NVDA
+  Micron: MU
+  Tesla: TSLA
+  Amazon: AMZN
+  Microsoft: MSFT
+  Apple: AAPL
+  Uber: UBER
+  Lyft: LYFT
+  Waymo: GOOGL
+  Intel: INTC
+  AMD: AMD
+  Broadcom: AVGO
+  TSMC: TSM
+  Taiwan Semiconductor: TSM
+  Samsung: 005930.KS
+  SK Hynix: 000660.KS
+  ASML: ASML
+  Siemens Energy: ENR.DE
+  Siemens: SIE.DE
+  Rheinmetall: RHM.DE
+  SAP: SAP
+  Constellation Energy: CEG
+  Vistra: VST
+  Lockheed: LMT
+  Lockheed Martin: LMT
+  OpenAI: OpenAI
+  Anthropic: Anthropic
+  Boeing: BA
+  Berkshire: BRK-B
+  JPMorgan: JPM
+  Goldman: GS
+  Goldman Sachs: GS
+  Palantir: PLTR
+  Netflix: NFLX
+  Oracle: ORCL
+  Salesforce: CRM
+  CoreWeave: CRWV
+
+laender:
+  USA: [U.S., US, USA, United States, America, American, Washington, Vereinigte Staaten, amerikanisch]
+  China: [China, Chinese, Beijing, Peking, chinesisch]
+  Taiwan: [Taiwan, Taiwanese, Taipei]
+  Japan: [Japan, Japanese, Tokyo, japanisch]
+  Südkorea: [South Korea, Korean, Seoul, Südkorea]
+  Nordkorea: [North Korea, Pyongyang, Nordkorea]
+  EU: [EU, European Union, Brussels, Europäische Union, Brüssel, Eurozone, euro area]
+  Deutschland: [Germany, German, Berlin, Deutschland, deutsch]
+  Frankreich: [France, French, Paris, Frankreich]
+  Großbritannien: [UK, U.K., Britain, British, London, England, Großbritannien]
+  Italien: [Italy, Italian, Rome, Italien]
+  Schweiz: [Switzerland, Swiss, Schweiz]
+  Kanada: [Canada, Canadian, Ottawa, Kanada]
+  Mexiko: [Mexico, Mexican, Mexiko]
+  Brasilien: [Brazil, Brazilian, Brasilien]
+  Indien: [India, Indian, New Delhi, Indien]
+  Russland: [Russia, Russian, Moscow, Kremlin, Russland, Moskau]
+  Ukraine: [Ukraine, Ukrainian, Kyiv, Kiev]
+  Iran: [Iran, Iranian, Tehran, Teheran]
+  Israel: [Israel, Israeli]
+  Saudi-Arabien: [Saudi, Saudi Arabia, Riyadh]
+  Türkei: [Turkish, Türkiye, Ankara, Erdogan, Türkei]
+  Venezuela: [Venezuela]
+  Australien: [Australia, Australian, Australien]
+  Vietnam: [Vietnam, Vietnamese]
+  Niederlande: [Netherlands, Dutch, Niederlande]
+
+institutionen:
+  Fed: [Fed, Federal Reserve, FOMC, US-Notenbank]
+  EZB: [ECB, EZB, European Central Bank]
+  BoJ: [BoJ, Bank of Japan]
+  BoE: [BoE, Bank of England]
+  PBOC: [PBOC, PBoC, People's Bank of China]
+  SNB: [SNB, Swiss National Bank]
+  Weißes Haus: [White House, Weißes Haus, Oval Office]
+  US-Finanzministerium: [Treasury, US Treasury, Treasury Department]
+  USTR: [USTR, Trade Representative]
+  US-Handelsministerium: [Commerce Department, Department of Commerce, Commerce Dept]
+  SEC: [SEC, Securities and Exchange Commission]
+  FTC: [FTC, Federal Trade Commission]
+  Justizministerium: [DOJ, Justice Department]
+  Pentagon: [Pentagon, Defense Department, Department of War]
+  Kongress: [Congress, Senate, House of Representatives, Kongress, Senat]
+  Supreme Court: [Supreme Court]
+  OPEC: [OPEC, OPEC+]
+  IWF: [IMF, IWF, International Monetary Fund]
+  WTO: [WTO]
+  EU-Kommission: [European Commission, EU-Kommission]
+  NATO: [NATO]
+
+personen:
+  Trump: [Trump]
+  Powell: [Powell]
+  Bessent: [Bessent]
+  Lutnick: [Lutnick]
+  Greer: [Greer]
+  Vance: [Vance]
+  Lagarde: [Lagarde]
+  Xi Jinping: [Xi Jinping, Xi]
+  Putin: [Putin]
+  Selenskyj: [Zelensky, Zelenskiy, Selenskyj]
+  Netanyahu: [Netanyahu]
+  Musk: [Musk]
+  Jensen Huang: [Jensen Huang, Huang]
+  Sam Altman: [Altman]
+  Ueda: [Ueda]
+  Waller: [Waller]
+  Merz: [Merz]
+
+# Ereignistypen: Wörter oder reguläre Ausdrücke (in Schrägstrichen /…/). Reihenfolge = Vorrang.
+ereignisse:
+  zoelle_handel: [tariff, tariffs, export, exports, chip sales to China, '/\bsells? .{0,40}\bto china\b/', duties, duty on, levy, trade deal, trade war, trade talks, export control, export ban, import ban, Section 232, Section 301, reciprocal, de minimis, Zoll, Zölle, Handelsabkommen, Handelsstreit, Exportkontrolle, sanction, sanctions, Sanktionen]
+  notenbank: [rate cut, rate hike, rate decision, cuts rates, hikes rates, holds rates, basis points, bps, FOMC, monetary policy, dovish, hawkish, QT, balance sheet, Zinsentscheid, Zinssenkung, Zinserhöhung, Leitzins, Geldpolitik]
+  konjunktur: ['/\bActual\b.*\(Forecast/', CPI, PPI, PCE, inflation, payrolls, nonfarm, jobless claims, unemployment rate, GDP, retail sales, ISM, PMI, JOLTS, consumer confidence, housing starts, durable goods, industrial production, Ifo, ZEW, Inflation, Arbeitslosenquote, BIP, Einzelhandelsumsatz]
+  geopolitik: [war, missile, strike on, airstrike, attack, invasion, troops, ceasefire, military, drone, nuclear, blockade, Strait of Hormuz, Red Sea, Houthi, escalation, Krieg, Angriff, Waffenstillstand, Militär, Rakete, Eskalation]
+  uebernahme: [acquire, acquires, acquisition, to buy, takeover, merger, merge, buyout, deal to buy, in talks to buy, tender offer, Übernahme, übernimmt, Fusion, Kaufangebot]
+  prognose: [guidance, outlook, forecast, raises, lowers, cuts outlook, profit warning, sees FY, sees Q, expects revenue, Prognose, Ausblick, Gewinnwarnung]
+  geschaeftszahlen: [beats estimates, beat estimates, misses estimates, missed estimates, tops estimates, above estimates, below estimates, earnings, results, quarterly, revenue, EPS, Q1, Q2, Q3, Q4, net income, Quartalszahlen, Umsatz, Gewinn je Aktie, Results of Operations]
+  rating: [upgrade, downgrade, price target, initiates coverage, rating, outperform, underperform, overweight, underweight, Kursziel, Hochstufung, Abstufung, Moody's, S&P Global Ratings, Fitch]
+  regulierung: [regulator, regulation, antitrust, probe, investigation, approval, approves, FDA, FCC, EU Commission fines, fine, ban, Kartell, Regulierung, Genehmigung, Verbot]
+  rechtsstreit: [lawsuit, sues, sued, court, ruling, judge, verdict, settlement, indictment, Klage, Gericht, Urteil, Vergleich]
+  personalien: [CEO, CFO, chairman, resigns, steps down, appoints, appointed, named, nominate, nominee, Rücktritt, ernannt, Vorstandschef, Chef]
+  kapitalmassnahme: [buyback, repurchase, dividend, offering, share sale, convertible, stock split, Aktienrückkauf, Dividende, Kapitalerhöhung, Aktiensplit]

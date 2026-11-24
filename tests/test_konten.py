@@ -116,8 +116,9 @@ class Konten(unittest.TestCase):
         self.assertNotIn("abc-geheimer-wert-123", c.get("/api/verwaltung").text)
         roh = Path(self.ordner, "konten", "keys.enc").read_bytes()
         self.assertNotIn(b"abc-geheimer-wert-123", roh)
-        if not os.environ.get("FRED_API_KEY"):
-            from app.einstellungen import key
+        # Nur pruefbar, wenn der Key nicht schon in Umgebung oder .env steht (die haben Vorrang vor dem Tool)
+        from app.einstellungen import _env_dateien, key
+        if not os.environ.get("FRED_API_KEY") and not _env_dateien().get("FRED_API_KEY"):
             self.assertEqual(key("FRED_API_KEY"), "abc-geheimer-wert-123")
         self.assertEqual(self.post(freund, "/api/verwaltung/einstellung", {"name": "FRED_API_KEY", "wert": "x"}, "put").status_code, 403)
 

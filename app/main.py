@@ -13,7 +13,7 @@ from .benutzer import Benutzer
 from .konfig import vorlagen_kopieren
 from .markt.bewertung import bewerte
 from .markt.kopfzeile import top_mover
-from .markt.squawk import schlagzeile
+from .markt.nachrichten.kompatibel import schlagzeile
 from .markt.zitate import auftritte
 from .markt.kurse import kurs_eur, suche_werte, ticker_fuer, vorladen
 from .markt.maerkte import cockpit, index_verlauf
@@ -40,7 +40,6 @@ from .nutzer.verteilung import verteilung as _verteilung_fuer_rotation
 from .nutzer.freibetrag import freibetrag
 from .nutzer.intraday import ny_tagesverlauf, seit_ny, tr_tag
 from .nutzer.kalender import frische_zahlen, kalender
-from .nutzer.newsfeed import newsfeed
 from .nutzer.perioden import perioden
 from .nutzer.portfolio import berechne
 from .nutzer.tagesverlauf import tagesverlauf
@@ -82,6 +81,15 @@ def hintergrund_starten():
     starte_hintergrund()
     from .markt.gamma import starte_hintergrund as gamma_hintergrund
     gamma_hintergrund()
+    # Neuer Newsfeed: schnelle Quellen im Hintergrund (app/markt/nachrichten)
+    from .markt.nachrichten import abruf as nachrichten_abruf
+    nachrichten_abruf.starte()
+    from .markt.nachrichten import geschichten as nachrichten_geschichten
+    nachrichten_geschichten.starte()
+    from .markt.nachrichten import nachrecherche as nachrichten_nachrecherche
+    nachrichten_nachrecherche.starte()
+    from .markt.nachrichten import telegram as nachrichten_telegram
+    nachrichten_telegram.starte()
     # Lädt einmal am Tag die großen Datenmengen für "Großes Geld" (S&P-500-Kurse, KGVs, FINRA, 13F).
     starte_grosses_geld()
     # Punkt 29b: "Warum bewegt sich der Markt?" alle 30 Minuten zur Handelszeit und nach Börsenschluss.
@@ -110,7 +118,8 @@ app.add_middleware(GZipMiddleware, minimum_size=2000)
 # ---- Anmeldung (nur mit VINTER_ANMELDUNG=passwort, also auf dem NUC) ----
 # Ohne gültige Sitzung gibt es nur die Anmeldeseite (und was sie zum Aussehen braucht).
 OFFEN = ("/anmelden", "/style.css", "/vinter.css", "/manifest.webmanifest", "/api/konto/status", "/api/konto/anmelden",
-         "/api/konto/einrichten", "/api/konto/einladung/annehmen", "/api/konto/einladung/pruefen")
+         "/api/konto/einrichten", "/api/konto/einladung/annehmen", "/api/konto/einladung/pruefen",
+         "/api/nachrichten/eingang")  # prüft selbst den persönlichen Token (iOS-Kurzbefehl)
 
 
 @app.middleware("http")
@@ -1772,12 +1781,128 @@ def reden_und_zitate():
         return {"fehler": "Die Reden und Zitate konnten gerade nicht geladen werden."}
 
 
-@app.get("/api/newsfeed")
-def live_newsfeed(b: Benutzer = Ich):
+# ---- Newsfeed, Neuaufbau (app/markt/nachrichten) ----
+@app.get("/api/nachrichten")
+def nachrichten_liste(seit: str | None = None, b: Benutzer = Ich):
+    from .markt.nachrichten import speicher
     try:
-        return newsfeed(b)
+        return {"meldungen": speicher.neueste(b.name, seit), "quellen": speicher.alle_quellen()}
     except Exception:
         return {"fehler": "Der Newsfeed konnte gerade nicht geladen werden."}
+
+
+async def _eingang_lesen(request: Request) -> tuple[str, str]:
+    import json
+    roh = (await request.body())[:20_000]
+    art = request.headers.get("content-type", "")
+    if "json" in art:
+        try:
+            d = json.loads(roh or b"{}")
+        except ValueError:
+            d = {}
+        return str(d.get("text") or ""), str(d.get("link") or d.get("url") or "")
+    if "form" in art:
+        from urllib.parse import parse_qs
+        d = {k: v[0] for k, v in parse_qs(roh.decode("utf-8", "replace")).items()}
+        return d.get("text", ""), d.get("link", "") or d.get("url", "")
+    return roh.decode("utf-8", "replace"), ""
+
+
+@app.post("/api/nachrichten/eingang")
+async def nachrichten_eingang(request: Request):
+    """Für den iOS-Kurzbefehl: Text oder Link mit persönlichem Token (Authorization: Bearer …)."""
+    from .markt.nachrichten import eingang
+    benutzer = eingang.token_pruefen(request.headers.get("authorization"))
+    if not benutzer:
+        return JSONResponse({"fehler": "Token fehlt oder ist ungültig."}, status_code=401)
+    text, link = await _eingang_lesen(request)
+    try:
+        return {"ok": True, "id": eingang.aufnehmen(benutzer, text, link)}
+    except eingang.EingangFehler as fehler:
+        return JSONResponse({"fehler": str(fehler)}, status_code=400)
+
+
+@app.post("/api/nachrichten/eingang/tool")
+async def nachrichten_eingang_tool(request: Request, b: Benutzer = Ich):
+    from .markt.nachrichten import eingang
+    if request.headers.get("x-vinter") != "nachrichten":
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    text, link = await _eingang_lesen(request)
+    try:
+        return {"ok": True, "id": eingang.aufnehmen(b.name, text, link)}
+    except eingang.EingangFehler as fehler:
+        return {"fehler": str(fehler)}
+
+
+@app.get("/api/nachrichten/token")
+def nachrichten_token_status(b: Benutzer = Ich):
+    from .markt.nachrichten import eingang
+    return {"vorhanden": eingang.token_vorhanden(b.name)}
+
+
+@app.post("/api/nachrichten/token")
+def nachrichten_token_neu(request: Request, b: Benutzer = Ich):
+    """Neuen Token erzeugen (nur einmal sichtbar). Der alte wird ungültig."""
+    from .markt.nachrichten import eingang
+    if request.headers.get("x-vinter") != "nachrichten":
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    return {"token": eingang.token_erzeugen(b.name)}
+
+
+@app.get("/api/nachrichten/geschichten")
+def nachrichten_geschichten_route(stunden: int = 24, b: Benutzer = Ich):
+    from .nutzer.nachrichten import uebersicht
+    try:
+        return uebersicht(b, stunden)
+    except Exception:
+        return {"fehler": "Der Newsfeed konnte gerade nicht geladen werden."}
+
+
+@app.post("/api/nachrichten/bewertung")
+async def nachrichten_bewertung(request: Request, b: Benutzer = Ich):
+    from .nutzer.nachrichten import bewerten
+    if request.headers.get("x-vinter") != "nachrichten":
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    try:
+        d = await request.json()
+        return bewerten(b, int(d.get("story")), str(d.get("urteil")))
+    except (ValueError, TypeError) as fehler:
+        return {"fehler": str(fehler)}
+
+
+@app.get("/api/nachrichten/telegram")
+def telegram_status(request: Request):
+    from .anmeldung import admin
+    from .markt.nachrichten import telegram
+    admin(request)
+    return telegram.status()
+
+
+@app.post("/api/nachrichten/telegram/{schritt}")
+async def telegram_anmeldung(schritt: str, request: Request):
+    """Anmeldung in Schritten: telefon → code → (passwort); abmelden. Nur Admin, Header x-vinter: telegram."""
+    import asyncio
+    from .anmeldung import admin
+    from .markt.nachrichten import telegram
+    k = admin(request)
+    if request.headers.get("x-vinter") != "telegram":
+        return JSONResponse({"fehler": "Nicht erlaubt."}, status_code=403)
+    try:
+        d = await request.json()
+    except Exception:
+        d = {}
+    try:
+        if schritt == "telefon":
+            return await asyncio.to_thread(telegram.code_anfordern, str(d.get("telefon") or ""))
+        if schritt == "code":
+            return await asyncio.to_thread(telegram.code_senden, str(d.get("code") or ""), k["ordner"])
+        if schritt == "passwort":
+            return await asyncio.to_thread(telegram.passwort_senden, str(d.get("passwort") or ""), k["ordner"])
+        if schritt == "abmelden":
+            return await asyncio.to_thread(telegram.abmelden)
+    except telegram.TelegramFehler as fehler:
+        return JSONResponse({"fehler": str(fehler)}, status_code=400)
+    return JSONResponse({"fehler": "Unbekannter Schritt."}, status_code=404)
 
 
 @app.get("/api/verlauf")

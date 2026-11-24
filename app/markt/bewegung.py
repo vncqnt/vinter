@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from . import earnings, indizes, ki, makro, positionierung, signale, squawk, themen
+from . import earnings, indizes, ki, makro, positionierung, signale, themen
 from .abruf import STUNDE, gecacht, historie_eintragen, historie_lesen, hole
 from ..cache import markt_lesen, markt_schreiben
 
@@ -362,7 +362,11 @@ def _schlagzeile_punkte(m: dict, z: dict, muster: re.Pattern, alle: list[dict], 
 def _news(treiber: list[dict]) -> list[dict]:
     us = {z["ticker"]: {"name": z["name"], "aliase": _aliase(z["name"], z["ticker"])} for z in treiber if "." not in z["ticker"]}
     try:
-        feed = squawk.feed(us)["meldungen"]
+        # Neuer Newsfeed: Firmen-News der Treiber (Finnhub, höchstens alle 5 Min. je Wert) plus alle schnellen Quellen
+        from .nachrichten import kompatibel, nachrecherche
+        for t, w in us.items():
+            nachrecherche.firmen_news(t, w["aliase"])
+        feed = kompatibel.meldungen(30)
     except Exception:
         return []
     jetzt = datetime.now(BERLIN)

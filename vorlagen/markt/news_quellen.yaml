@@ -1,79 +1,90 @@
-# Quellen und Regeln für den Live-Newsfeed (Seite "News").
-# Du kannst Quellen ergänzen, abschalten (aktiv: false) und Schlüsselwörter ändern.
+# Quellen und Regeln für den Newsfeed (Version 2, Neuaufbau ab 24.11.2026).
+# Du kannst Quellen ergänzen, abschalten (aktiv: false) und Kanäle hinzufügen.
 # Änderungen gelten beim nächsten Abruf, ein Neustart ist nicht nötig.
 #
 # art:
-#   rss      ein RSS- oder Atom-Feed (Adresse unter "adresse")
-#   finnhub  Firmen-News pro US-Position (braucht FINNHUB_API_KEY in .env)
-#   sec      8-K-Meldungen pro US-Position bei der SEC (braucht SEC_USER_AGENT in .env)
-# kontakt: true   die Quelle verlangt eine Kontaktangabe, dafür wird SEC_USER_AGENT mitgeschickt
-# intervall_s     wie oft höchstens neu abgefragt wird (Sekunden)
-# max_pro_wert    bei Finnhub und SEC: höchstens so viele Meldungen je Wert
-# tags            Tags, die jede Meldung dieser Quelle automatisch bekommt
+#   rss       RSS- oder Atom-Feed (Adresse unter "adresse")
+#   telegram  öffentliche Telegram-Kanäle (Liste unter "telegram: kanaele"), Anmeldung im Tool
+# stufe (für die Bewertung):
+#   1 = Originalquelle (Behörde, Notenbank, Firma selbst über Newswire oder SEC)
+#   2 = schnelle Eilmeldungen (Squawk, Telegram); gelten als "unbestätigt", bis eine zweite Quelle sie bringt
+#   3 = Medien und Sammeldienste
+# intervall_s   wie oft höchstens abgefragt wird (Sekunden). Bei Fehlern wartet Vinter automatisch länger.
+# kontakt: sec  die Quelle verlangt eine Kontaktangabe, dafür wird SEC_USER_AGENT mitgeschickt
+# formulare     nur bei der SEC: diese Meldungsarten werden behalten (der Rest ist Rauschen)
+
+version: 2
 
 quellen:
   - name: FinancialJuice
     art: rss
     adresse: https://www.financialjuice.com/feed.ashx?xy=rss
+    stufe: 2
+    intervall_s: 45
+    hinweis: inoffizieller Feed, drosselt bei zu vielen Abfragen
+  - name: SEC 8-K
+    art: rss
+    adresse: https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&owner=include&count=40&output=atom
+    stufe: 1
+    intervall_s: 60
+    kontakt: sec
+  - name: SEC 6-K
+    art: rss
+    adresse: https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=6-K&owner=include&count=40&output=atom
+    stufe: 1
     intervall_s: 120
-    hinweis: inoffizieller Feed, kann ausfallen
+    kontakt: sec
+  - name: GlobeNewswire
+    art: rss
+    adresse: https://www.globenewswire.com/RssFeed/orgclass/1/feedTitle/GlobeNewswire%20-%20News%20about%20Public%20Companies
+    stufe: 1
+    intervall_s: 60
+  - name: PR Newswire
+    art: rss
+    adresse: https://www.prnewswire.com/rss/news-releases-list.rss
+    stufe: 1
+    intervall_s: 60
+  - name: Business Wire
+    art: rss
+    adresse: https://feed.businesswire.com/rss/home/?rss=G1QFDERJXkJeEFtRWA==
+    stufe: 1
+    intervall_s: 90
+  - name: Weißes Haus
+    art: rss
+    adresse: https://www.whitehouse.gov/news/feed/
+    stufe: 1
+    intervall_s: 120
+  - name: Weißes Haus Erlasse
+    art: rss
+    adresse: https://www.whitehouse.gov/presidential-actions/feed/
+    stufe: 1
+    intervall_s: 120
   - name: Fed
     art: rss
     adresse: https://www.federalreserve.gov/feeds/press_all.xml
-    intervall_s: 600
-    tags: [Notenbank]
+    stufe: 1
+    intervall_s: 180
   - name: EZB
     art: rss
     adresse: https://www.ecb.europa.eu/rss/press.html
-    intervall_s: 600
-    tags: [Notenbank]
-  - name: BLS Arbeitsmarkt
+    stufe: 1
+    intervall_s: 180
+  - name: BLS
     art: rss
-    adresse: https://www.bls.gov/feed/empsit.rss
-    intervall_s: 900
-    kontakt: true
-    tags: [Makro]
-  - name: BLS Verbraucherpreise
-    art: rss
-    adresse: https://www.bls.gov/feed/cpi.rss
-    intervall_s: 900
-    kontakt: true
-    tags: [Makro]
-  - name: BLS Erzeugerpreise
-    art: rss
-    adresse: https://www.bls.gov/feed/ppi.rss
-    intervall_s: 900
-    kontakt: true
-    tags: [Makro]
-  - name: Finnhub
-    art: finnhub
+    adresse: https://www.bls.gov/feed/bls_latest.rss
+    stufe: 1
     intervall_s: 300
-    max_pro_wert: 5   # nur die neuesten Artikel je Wert, sonst überflutet ein Wert den Feed
-  - name: SEC 8-K
-    art: sec
-    intervall_s: 900
+    kontakt: sec
+  - name: Telegram
+    art: telegram
+    stufe: 2
 
-# Meldungen älter als so viele Tage fallen raus.
-tage: 3
+telegram:
+  # Öffentliche Kanäle (Name ohne @). Nur lesen, Vinter postet nie etwas.
+  kanaele: [WalterBloomberg]
 
-# Schlagzeilen, die eines dieser Wörter enthalten, werden gar nicht gezeigt.
-# FinancialJuice postet morgens Chart-Bilder ohne Text (Korrelationen, Volatilitäten), die blenden wir aus.
+# Vorspann, der von Schlagzeilen entfernt wird
+vorspann: ["FinancialJuice:"]
+
+# Schlagzeilen mit diesen Wörtern werden gar nicht gespeichert (Bilder ohne Text usw.)
 ausblenden: [FJElite, Correlation Matrix, Implied Volatility, Currency Strength Chart]
-
-# Automatische Tags. Ein Wort trifft nur als ganzes Wort (Plural-s ist erlaubt),
-# Groß- und Kleinschreibung egal.
-tags:
-  Notenbank: [Fed, FOMC, Powell, ECB, EZB, Lagarde, central bank, Notenbank, Leitzins, rate cut, rate hike, rate decision, Zinsentscheid, Zinssenkung, Zinserhöhung, BoJ, BoE, SNB, Bundesbank]
-  Makro: [CPI, PPI, PCE, inflation, Inflation, payrolls, nonfarm, unemployment, jobless claims, GDP, BIP, retail sales, SOFR, PMI, ISM, Arbeitsmarkt, Arbeitslosenquote, consumer confidence, Ifo, ZEW, JOLTS]
-  Earnings: [earnings, EPS, revenue, guidance, quarterly results, Q1, Q2, Q3, Q4, Quartalszahlen, Umsatz, Prognose, outlook, profit warning, Gewinnwarnung, 8-K]
-  Geopolitik: [Russia, Ukraine, China, Taiwan, Iran, Israel, Gaza, sanction, tariff, missile, NATO, Krieg, Sanktionen, Zölle, Zoll, Kreml, Kremlin, ceasefire, Waffenstillstand, export controls, attack, explosion, airstrike, drone strike, Yemen, Houthi, Red Sea, Hormuz, North Korea, Venezuela, Angriff, Explosion, strike, drone, Drohne]
-  Rohstoffe: [oil, crude, Brent, WTI, OPEC, gold, silver, copper, natural gas, LNG, uranium, Öl, Gas, Gold, Kupfer, Silber, Uran]
-
-# "Wichtig"-Markierung, wenn eines dieser Wörter in der Schlagzeile steht.
-wichtig: [rate decision, interest rate decision, Zinsentscheid, FOMC statement, CPI, PCE, Payrolls, nonfarm, GDP, unemployment rate, retail sales, ISM, emergency, crash, trading halt, circuit breaker, default, bankruptcy, Insolvenz, Notfall, acquisition, acquire, takeover, Übernahme, merger, Fusion, raises guidance, cuts guidance, lowers guidance, raises outlook, lowers outlook, cuts outlook, raises forecast, cuts forecast, lowers forecast, Prognose gesenkt, Prognose angehoben, profit warning, Gewinnwarnung]
-
-# Zusätzlich wichtig, wenn die Schlagzeile einen deiner Werte betrifft.
-wichtig_eigene: [earnings, results, Geschäftszahlen, guidance, outlook, Prognose, upgrade, downgrade, price target, Kursziel, CEO, CFO, resign, Rücktritt, Wechsel im Vorstand, investigation, probe, lawsuit, Klage, recall, Rückruf, buyback, Aktienrückkauf, dividend, Dividende, offering, Kapitalerhöhung, Verkauf neuer Aktien]
-
-# Wichtig ist auch eine Schlagzeile wie "Taiwan stocks fall over 4%": eine Bewegung ab so vielen Prozent.
-wichtig_ab_prozent: 3

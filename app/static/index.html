@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="Vinter">
   <link rel="preload" href="schriften/unbounded-400-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="schriften/manrope-400-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=234">
+  <link rel="stylesheet" href="style.css?v=235">
   <link rel="stylesheet" href="vinter.css?v=1">
 </head>
 <body>
@@ -1166,7 +1166,7 @@
     <div class="seite" id="seite-news" hidden>
       <h1>News</h1>
       <div class="filter n-ansicht" id="n-ansicht" role="group" aria-label="Ansicht wählen">
-        <button type="button" data-ansicht="ticker">Ticker</button>
+        <button type="button" data-ansicht="ticker">Geschichten</button>
         <button type="button" data-ansicht="reden">Reden &amp; Zitate</button>
       </div>
       <div id="n-teil-reden" hidden>
@@ -1177,10 +1177,27 @@
       </div>
       <div id="n-teil-ticker">
       <p id="n-status" class="sekundaer" role="status">News werden geladen …</p>
-      <div class="filter n-tags" id="n-tags" role="group" aria-label="News nach Thema filtern"></div>
+      <div class="n-steuer">
+        <div class="filter n-bereich" id="n-bereich" role="group" aria-label="Bereich wählen">
+          <button type="button" data-bereich="markt">Markt bewegend<span></span></button>
+          <button type="button" data-bereich="meine">Meine Positionen<span></span></button>
+          <button type="button" data-bereich="alle">Alle<span></span></button>
+          <button type="button" data-bereich="aus">Ausgefiltert<span></span></button>
+        </div>
+        <div class="filter n-zeitraum" id="n-zeitraum" role="group" aria-label="Zeitraum">
+          <button type="button" data-stunden="6">6 Std.</button><button type="button" data-stunden="24">24 Std.</button><button type="button" data-stunden="72">3 Tage</button>
+        </div>
+      </div>
+      <div class="n-eil" id="n-eil" role="alert" hidden></div>
+      <form class="n-eingabe" id="n-eingabe"><input name="text" class="pv-select" maxlength="2000" placeholder="Eigene Meldung oder Link einspeisen (z. B. aus X oder Telegram)" aria-label="Eigene Meldung oder Link"><button class="knopf ca-mini" type="submit">Einspeisen</button></form>
       <div id="n-quellen" class="n-quellen" hidden></div>
-      <section class="karte n-feed" id="n-liste" aria-label="Meldungen" aria-live="polite" hidden></section>
-      <p class="hinweis">Laufender Nachrichtenticker aus FinancialJuice, Pressemitteilungen von Fed und EZB, Veröffentlichungen der US-Arbeitsmarktbehörde BLS sowie Finnhub-News und SEC-Pflichtmeldungen (8-K) zu deinen US-Werten. Neueste oben, alle ein bis zwei Minuten kommen neue Meldungen dazu. Fällt eine Quelle aus, bleiben ihre letzten Meldungen stehen. Grün markiert: Meldungen zu deinen Positionen, gold markiert: passt zu einem News-Thema deiner Thesen. Tags und „Wichtig“-Wörter vergibt Vinter nach festen Regeln; Quellen und Wörter änderst du in daten/markt/news_quellen.yaml. Gleiche Meldungen aus mehreren Quellen stehen nur einmal da. News passend zu deinen Thesen mit Einordnung findest du unter Thesen.</p>
+      <div class="n-stories" id="n-liste" aria-live="polite"></div>
+      <details class="hinweis n-hinweis"><summary>So funktioniert der Feed</summary>
+        <p>Vinter liest laufend schnelle Quellen mit: Telegram-Kanäle (nur für dich sichtbar), FinancialJuice, die Live-Meldungen der SEC (8-K, 6-K), die Pressemitteilungs-Dienste GlobeNewswire, PR Newswire und Business Wire sowie Weißes Haus, Fed, EZB und BLS. Dazu kommt, was du selbst einspeist (Feld oben oder iPhone-Kurzbefehl, siehe Einstellungen).</p>
+        <p>Aus jeder Schlagzeile erkennt Vinter Firmen, Länder, Institutionen, Personen und den Ereignistyp. Ähnliche Meldungen werden zu einer Geschichte zusammengefasst. Die Zahl rechts oben ist die Wichtigkeit (0–100): Ereignistyp, beteiligte Stellen und Personen, Zahl der unabhängigen Quellen, wie schnell die Geschichte wächst, Eilmeldungs-Stil. Für die Reihenfolge zählt auch das Alter.</p>
+        <p><b>Markt bewegend</b> zeigt alles ab Wichtigkeit 30, ohne Filter nach deinen Thesen. <b>Meine Positionen</b> zeigt Geschichten zu deinem Depot, deiner Watchlist und den News-Themen deiner Thesen. <b>Squawk, unbestätigt</b> heißt: bisher nur eine schnelle Eilmeldungsquelle, noch keine zweite. Werbung und Rauschen (z. B. Pressemitteilungen ohne börsennotierte Firma) stehen unter <b>Ausgefiltert</b>, mit Grund.</p>
+        <p>Deine Bewertungen (wichtig, unwichtig, Werbung) werden gesammelt; ab etwa 30 Stück lernt Vinter daraus. Quellen und Kanäle: daten/markt/news_quellen.yaml, Wörter und Filter: daten/markt/news_begriffe.yaml.</p>
+      </details>
       </div>
     </div>
 
@@ -1203,6 +1220,6 @@
   <script src="lib/karte/d3.min.js"></script>
   <script src="lib/karte/topojson-client.min.js"></script>
   <script src="lib/lightweight-charts/lightweight-charts.standalone.production.js"></script>
-  <script src="app.js?v=286"></script>
+  <script src="app.js?v=288"></script>
 </body>
 </html>

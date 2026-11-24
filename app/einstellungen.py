@@ -24,6 +24,8 @@ EINSTELLUNGEN = [
     {"name": "FRED_API_KEY", "geheim": True, "text": "FRED der St. Louis Fed: US-Makrodaten (Gratis-Key)"},
     {"name": "CENSUS_API_KEY", "geheim": True, "text": "US Census: US-Handelsdaten (Gratis-Key)"},
     {"name": "COMTRADE_API_KEY", "geheim": True, "text": "UN Comtrade: weltweite Handelsdaten (Gratis-Key)"},
+    {"name": "TELEGRAM_API_ID", "geheim": True, "text": "Telegram: API-ID von my.telegram.org (Newsfeed liest öffentliche Kanäle)"},
+    {"name": "TELEGRAM_API_HASH", "geheim": True, "text": "Telegram: API-Hash von my.telegram.org"},
     {"name": "AISSTREAM_API_KEY", "geheim": True, "text": "aisstream.io: Live-Schiffe auf der Weltkarte (Gratis-Key)"},
     {"name": "SEC_USER_AGENT", "geheim": True, "text": "Kontakt für die SEC (Pflicht bei EDGAR), z. B. 'Vorname Nachname name@example.de'"},
     {"name": "HANDEL_KONTAKT", "geheim": True, "text": "Kontakt im User-Agent beim Abruf von Webseiten (Handelsdaten), leer = ohne"},

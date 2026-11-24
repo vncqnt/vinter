@@ -3912,3 +3912,50 @@ line.gx-p-flip { stroke: var(--grau); stroke-dasharray: 2 4; vector-effect: non-
   .gx-kopf span:nth-child(1), .gx-kopf span:nth-child(7), .gx-zeile > .gx-d:first-child, .gx-zeile > .gx-d:last-child { display: none; }
   .gx-d { font-size: .6875rem; }
 }
+
+/* Newsfeed (Neuaufbau): Story-Karten */
+.n-steuer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1rem; margin-top: .75rem; }
+.n-bereich button span { margin-left: .375rem; color: var(--grau); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.n-eingabe { display: flex; gap: .5rem; margin-top: .75rem; }
+.n-eingabe input { flex: 1; min-width: 0; }
+.n-eil { margin-top: .75rem; padding: .625rem .875rem; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--verlust) 45%, transparent); background: color-mix(in srgb, var(--verlust) 10%, transparent); font-size: .9375rem; }
+.n-eil-zeichen { display: inline-block; margin-right: .5rem; padding: 1px .5rem; border-radius: 6px; background: var(--verlust); color: #000; font-size: .75rem; font-weight: 600; }
+.n-stories { display: grid; gap: .75rem; margin-top: 1rem; }
+.n-story { padding: .875rem 1.125rem; display: grid; gap: .375rem; border-left: 3px solid transparent; }
+.n-story.eigen { border-left-color: var(--akzent); }
+.n-story.neu .n-s-kopf .n-zeit { color: var(--akzent); }
+.n-s-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .625rem; font-size: .75rem; color: var(--grau); }
+.n-s-typ { padding: 1px .5rem; border-radius: 6px; background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text); }
+.n-s-ok { color: var(--gewinn); }
+.n-s-squawk { color: var(--gold); }
+.n-s-score { margin-left: auto; font-variant-numeric: tabular-nums; padding: 1px .4375rem; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.n-s-titel { margin: 0; font-size: 1rem; font-weight: 500; line-height: 1.4; }
+.n-s-titel a { color: inherit; text-decoration: none; }
+.n-s-titel a:hover { text-decoration: underline; }
+.n-story.eil .n-s-titel { font-weight: 600; }
+.n-s-text { margin: 0; color: var(--grau); font-size: .875rem; line-height: 1.5; }
+.n-s-bezug { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .375rem; }
+.n-chip { padding: 1px .4375rem; border-radius: 6px; font-size: .75rem; background: color-mix(in srgb, var(--text) 6%, transparent); font-variant-numeric: tabular-nums; }
+.n-chip.eigen { background: color-mix(in srgb, var(--akzent) 22%, transparent); color: var(--akzent); }
+.n-chip.these { background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold); }
+.n-s-extra { color: var(--grau); font-size: .75rem; margin-left: .25rem; }
+.n-s-strahl { margin: .125rem 0 0; padding: 0; list-style: none; display: grid; gap: .1875rem; font-size: .8125rem; }
+.n-s-strahl li { display: grid; grid-template-columns: 2.75rem 8.5rem minmax(0, 1fr); gap: .5rem; align-items: baseline; }
+.n-s-strahl a, .n-aus-zeile a { color: inherit; }
+.n-s-quelle { color: var(--grau); font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.n-s-quelle.tg { color: var(--gold); }
+.n-s-einzel { margin: 0; font-size: .75rem; }
+.n-s-einzel a { color: var(--grau); }
+.n-s-mehr summary { cursor: pointer; font-size: .75rem; color: var(--grau); margin-top: .25rem; }
+.n-s-fuss { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .375rem; font-size: .75rem; margin-top: .25rem; }
+.n-s-urteil { display: flex; gap: .25rem; }
+.n-s-urteil button[aria-pressed="true"] { border-color: var(--akzent); color: var(--akzent); }
+.n-aus { padding: .875rem 1.125rem; display: grid; gap: .25rem; }
+.n-aus-zeile { display: grid; grid-template-columns: 2.75rem 8.5rem minmax(0, 1fr); gap: .5rem; font-size: .8125rem; align-items: baseline; }
+.n-aus-zeile small { display: block; color: var(--grau); font-size: .6875rem; }
+.n-leer { margin-top: 1rem; }
+@media (max-width: 560px) {
+  .n-s-strahl li, .n-aus-zeile { grid-template-columns: 2.5rem minmax(0, 1fr); }
+  .n-s-strahl .n-s-quelle, .n-aus-zeile .n-s-quelle { grid-column: 2; }
+  .n-s-strahl li > a, .n-s-strahl li > :last-child { grid-column: 2; }
+}
