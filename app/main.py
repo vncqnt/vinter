@@ -1014,6 +1014,109 @@ def prognose_entfernen(markt_id: str, request: Request, b: Benutzer = Ich):
     return _prognosen_aktion(request, lambda: prognosen.entfernen(b, markt_id))
 
 
+@app.get("/api/bezug/richtungen")
+def bezug_richtungen():
+    from .markt.bezug import richtungen
+    return {"richtungen": richtungen()}
+
+
+@app.get("/api/bezug")
+def bezug_lesen(id: str = "", b: Benutzer = Ich):
+    """Was ist der gewählte Bezug eines Arbeitsplatzes (Wert oder Marktrichtung), und was hat er mit meinem Depot zu tun?"""
+    from .markt.bezug import aufloesen
+    try:
+        aus = aufloesen(id)
+    except ValueError as f:
+        return {"fehler": str(f)}
+    depot = _depot(b)
+    pos = {p.get("ticker"): p for p in depot.get("positionen", [])} if "fehler" not in depot else {}
+    if aus["art"] == "wert":
+        p = pos.get(aus["ticker"])
+        aus["position"] = {k: p.get(k) for k in ("name", "stueck", "wert_eur", "gv_eur", "gv_prozent", "kurs_eur")} if p else None
+        aus["thesen"] = [t["name"] for t in thesen.alle_thesen(b)["thesen"] if aus["ticker"] in (t.get("ticker") or [])]
+    else:
+        aus["eigene"] = [t for t in aus.get("mitglieder", []) if t in pos]
+    return aus
+
+
+@app.get("/api/bezug/meins")
+def bezug_meins(ticker: str, b: Benutzer = Ich):
+    """Alles Persönliche zu einem Wert für das Widget "Meine Position": Bestand, Einstand und Exit-Level
+    (Handelswährung), These, Preisalarme, gespeicherte Szenarien."""
+    from .markt.abruf import schlusskurse
+    from .nutzer.chartanalyse import alerts
+    from .nutzer.szenario import sets
+    ticker = ticker.upper()
+    aus = chart_meine(ticker, b)
+    try:
+        aus["kurs"] = float(schlusskurse(ticker, "5d").iloc[-1])
+    except Exception:
+        aus["kurs"] = None
+    depot = _depot(b)
+    pos = next((p for p in depot.get("positionen", []) if p.get("ticker") == ticker), None) if "fehler" not in depot else None
+    aus["position"] = {k: pos.get(k) for k in ("name", "stueck", "wert_eur", "gv_eur", "gv_prozent")} if pos else None
+    aus["thesen"] = [{"name": t["name"], "kernthese": t.get("kernthese"), "datei": t.get("datei")} for t in thesen.alle_thesen(b)["thesen"] if ticker in (t.get("ticker") or [])]
+    aus["alarme"] = [a for a in alerts(b).get("alerts", []) if a["ticker"] == ticker]
+    aus["szenarien"] = [{"id": s["id"], "name": s["name"], "datum": s["datum"]} for s in sets(b) if s.get("ticker") == ticker]
+    return aus
+
+
+@app.get("/api/drift/wert")
+def drift_wert(ticker: str):
+    """Post-Earnings-Drift eines einzelnen Werts (app/markt/drift.py)."""
+    from .markt.drift import je_aktie
+    try:
+        return je_aktie(ticker.upper())
+    except Exception as f:
+        return {"fehler": f"Keine Daten ({type(f).__name__})."}
+
+
+@app.get("/api/aehnlich")
+def aehnlich_route(id: str, zeitraum: str = "3m"):
+    """Ähnliche Werte zu einem Bezug: normierter Verlauf, Gleichlauf, Beta (app/markt/aehnlich.py)."""
+    from .markt.aehnlich import rechnen
+    from .markt.bezug import aufloesen
+    try:
+        return rechnen(aufloesen(id), zeitraum)
+    except ValueError as f:
+        return {"fehler": str(f)}
+    except Exception as f:
+        return {"fehler": f"Die Kurse sind gerade nicht abrufbar ({type(f).__name__})."}
+
+
+@app.get("/api/aehnlich/zahlen")
+def aehnlich_zahlen_route(id: str):
+    """Wie haben ähnliche Werte auf ihre letzten Quartalszahlen reagiert (app/markt/aehnlich.py)."""
+    from .markt.aehnlich import zahlen
+    from .markt.bezug import aufloesen
+    try:
+        return zahlen(aufloesen(id))
+    except ValueError as f:
+        return {"fehler": str(f)}
+    except Exception as f:
+        return {"fehler": f"Die Daten sind gerade nicht abrufbar ({type(f).__name__})."}
+
+
+@app.get("/api/richtung/mitglieder")
+def richtung_mitglieder_route(id: str):
+    """Mitglieder einer Marktrichtung: Rangliste, gleichgewichteter Korb, Breite (app/markt/richtung.py)."""
+    from .markt.bezug import aufloesen
+    from .markt.richtung import mitglieder
+    try:
+        return mitglieder(aufloesen(id))
+    except ValueError as f:
+        return {"fehler": str(f)}
+    except Exception as f:
+        return {"fehler": f"Die Kurse sind gerade nicht abrufbar ({type(f).__name__})."}
+
+
+@app.get("/api/erwartet")
+def erwartet_route(ticker: str, aktie: str | None = None):
+    """Vom Optionsmarkt erwartete Bewegung bis morgen, in 30 Tagen und um die nächsten Zahlen (app/markt/erwartet.py)."""
+    from .markt.erwartet import mit_zahlen
+    return mit_zahlen(ticker, aktie)
+
+
 @app.get("/api/tafel")
 def tafel_lesen(b: Benutzer = Ich):
     return tafel.lesen(b)

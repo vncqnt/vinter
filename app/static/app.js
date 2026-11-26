@@ -7282,8 +7282,11 @@ const balken = (anteil, art = '') => `<span class="tf-balken ${art}"><i style="w
 const KACHELN = {
   gamma: {
     titel: 'Gamma-Exposure SPY', ziel: '#gamma', min: [3, 2], std: [4, 2],
-    async zeige(box) {
-      const d = await tafelApi('/api/gamma?ticker=SPY&modus=monat');
+    bezug: ['wert', 'richtung'], titelMit: (c) => `Gamma-Exposure ${c.optionen ?? c.name}`,
+    passt: (c) => !!c.optionen,
+    async zeige(box, w, h, ctx) {
+      if (ctx && !ctx.optionen) { box.innerHTML = `<p class="tf-unter">Für ${esc(ctx.name)} gibt es keine US-Optionen bei Yahoo, deshalb kein Gamma.</p>`; return; }
+      const d = await tafelApi(`/api/gamma?ticker=${encodeURIComponent(ctx?.optionen ?? 'SPY')}&modus=monat`);
       if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
       const ueber = d.flip && d.kurs >= d.flip;
       box.innerHTML = `<p class="tf-zahl ${d.netto >= 0 ? 'plus' : 'minus'}">${gxGeld(d.netto, true)} $</p><p class="tf-unter">Netto-Gamma je 1 %, ${d.netto >= 0 ? 'eher dämpfend' : 'eher verstärkend'} · Kurs ${gxStrike(d.kurs)}${d.flip ? `, Flip ${gxStrike(d.flip)} (${ueber ? 'darüber' : 'darunter'})` : ''} · Call Wall ${d.call_wall ? gxStrike(d.call_wall) : '–'}, Put Wall ${d.put_wall ? gxStrike(d.put_wall) : '–'} · Yahoo, Stand ${tafelZeit(d.zeit)} Uhr</p>`;
@@ -7480,12 +7483,14 @@ const KACHELN = {
     async zeige(box) { await hdWidget(box); },
   },
   bewegung: {
-    titel: 'Markttreiber heute', ziel: '#bewegung', min: [4, 2], std: [12, 3],
-    async zeige(box, w, h) {
+    titel: 'Markttreiber heute', ziel: '#bewegung', min: [4, 2], std: [12, 3], bezug: ['richtung'], bezugOptional: true,
+    async zeige(box, w, h, ctx) {
       const d = await tafelApi('/api/bewegung');
       if (!d.indizes) { box.innerHTML = `<p class="tf-unter">${d.rechnet ? 'Wird gerade berechnet, gleich da.' : esc(d.fehler ?? 'Keine Daten.')}</p>`; return; }
       const ich = await bwIchLaden();
-      const spalten = d.indizes.filter((x) => !x.fehler);
+      let spalten = d.indizes.filter((x) => !x.fehler);
+      // Arbeitsplatz zum Gesamtmarkt: den passenden Index zuerst
+      if (ctx?.art === 'richtung') spalten = [...spalten].sort((a, b) => (b.name === ctx.name) - (a.name === ctx.name));
       const mitTreibern = h >= 3 && w >= 6;
       box.innerHTML = `${ich && h >= 3 ? `<p class="tf-unter bw-tf-ich">${bwIchSatz(ich)}</p>` : ''}<div class="bw-tf" style="--spalten:${w >= 9 ? spalten.length : 1}">${(w >= 9 ? spalten : spalten.slice(0, 1)).map((x) => `<div>
         <p class="bw-tf-kopf"><b>${esc(x.name)}</b> <span class="${klasse(x.index.prozent)}">${ggPz(x.index.prozent, gz2)}</span></p>
@@ -7572,26 +7577,29 @@ const KACHELN = {
     },
   },
   sektoren: {
-    titel: 'Sektoren heute', ziel: '#sektoren', min: [4, 3], std: [4, 4],
-    async zeige(box) {
+    titel: 'Sektoren heute', ziel: '#sektoren', min: [4, 3], std: [4, 4], bezug: ['richtung'], bezugOptional: true,
+    async zeige(box, w, h, ctx) {
       const d = await tafelApi('/api/sektoren');
       const s = [...d.sektoren].sort((a, b) => b.tag - a.tag);
+      const gewaehlt = ctx?.gruppe === 'Sektoren' ? ctx.name : null;
       box.innerHTML = `<div class="tf-heat">${s.map((x) => {
         const st = Math.min(1, Math.abs(x.tag) / 3);
         const f = x.tag >= 0 ? 'var(--gewinn)' : 'var(--verlust)';
-        return `<span style="background:color-mix(in srgb, ${f} ${Math.round(12 + st * 48)}%, transparent)"><b>${esc(x.name)}</b>${prozent.format(x.tag)} %</span>`;
+        return `<span class="${x.name === gewaehlt ? 'tw-gewaehlt' : ''}" style="background:color-mix(in srgb, ${f} ${Math.round(12 + st * 48)}%, transparent)"><b>${esc(x.name)}</b>${prozent.format(x.tag)} %</span>`;
       }).join('')}</div>`;
     },
   },
   themen: {
-    titel: 'Themen heute', ziel: '#themen', min: [4, 3], std: [4, 4],
-    async zeige(box, w, h) {
+    titel: 'Themen heute', ziel: '#themen', min: [4, 3], std: [4, 4], bezug: ['richtung'], bezugOptional: true,
+    async zeige(box, w, h, ctx) {
       const d = await tafelApi('/api/themen');
       const t = [...d.themen].filter((x) => x.schnitt?.tag != null).sort((a, b) => b.schnitt.tag - a.schnitt.tag);
       const n = tafelZeilen(h, 26);
-      const auswahl = t.length <= n ? t : [...t.slice(0, Math.ceil(n / 2)), ...t.slice(-Math.floor(n / 2))];
+      const gewaehlt = ctx?.gruppe === 'Themen' ? ctx.name : null;
+      let auswahl = t.length <= n ? t : [...t.slice(0, Math.ceil(n / 2)), ...t.slice(-Math.floor(n / 2))];
+      if (gewaehlt && !auswahl.some((x) => x.name === gewaehlt)) { const g = t.find((x) => x.name === gewaehlt); if (g) auswahl = [...auswahl.slice(0, -1), g].sort((a, b) => b.schnitt.tag - a.schnitt.tag); }
       const gross = Math.max(...auswahl.map((x) => Math.abs(x.schnitt.tag)), 0.5);
-      box.innerHTML = `<div class="tf-liste tf-mit-balken">${auswahl.map((x) => `<div><span>${esc(x.name)}</span>${balken(Math.abs(x.schnitt.tag) / gross, x.schnitt.tag >= 0 ? 'plus' : 'minus')}<b class="${klasse(x.schnitt.tag)}">${prozent.format(x.schnitt.tag)} %</b></div>`).join('')}</div>`;
+      box.innerHTML = `<div class="tf-liste tf-mit-balken">${auswahl.map((x) => `<div class="${x.name === gewaehlt ? 'tw-gewaehlt' : ''}"><span>${esc(x.name)}</span>${balken(Math.abs(x.schnitt.tag) / gross, x.schnitt.tag >= 0 ? 'plus' : 'minus')}<b class="${klasse(x.schnitt.tag)}">${prozent.format(x.schnitt.tag)} %</b></div>`).join('')}</div>`;
     },
   },
   earnings: {
@@ -7819,7 +7827,868 @@ Object.assign(KACHELN, {
   },
 });
 
+
+// ---- Widgets für Arbeitsplätze mit Bezug (Einzelwert, teils auch Marktrichtung) ----
+// Jedes bekommt den aufgelösten Bezug ctx (siehe /api/bezug): ctx.ticker = Kurs-Ticker (bei einer Richtung der
+// Leitwert), ctx.optionen = Ticker für Optionen und Gamma (bei Futures/Indizes ein ETF), ctx.typ = Art des Werts.
+const tafelTagZeit = (iso) => { const d = new Date(iso); return d.toDateString() === new Date().toDateString() ? tafelZeit(iso) : `${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} ${tafelZeit(iso)}`; };
+const twZahl = (v, f = gz2) => (v === null || v === undefined || Number.isNaN(v) ? '–' : f.format(v));
+const twProz = (v, f = gz1) => (v === null || v === undefined ? '–' : `${ggVz(v, f)} %`);
+const twVertreten = (ctx) => (ctx.optionen && ctx.optionen !== ctx.ticker ? `<p class="tf-unter">Optionen über ${esc(ctx.optionen)} als Stellvertreter für ${esc(ctx.name)}.</p>` : '');
+const twKeineOptionen = (ctx) => `<p class="tf-unter">Für ${esc(ctx.name)} gibt es bei Yahoo keine US-Optionen.</p>`;
+const twNurAktie = (ctx) => (ctx.art !== 'wert' || ctx.typ !== 'aktie');
+function twMerkeChart(ctx) { caWahl.ticker = ctx.ticker; }
+function twMerkeGamma(ctx) { if (!ctx.optionen) return; gxWahl.ticker = ctx.optionen; try { localStorage.setItem('gxTicker', ctx.optionen); } catch {} }
+// Zwei Balken nebeneinander: jetzt (Akzent) gegen früher (grau), gleiche Skala
+function twZweiBalken(jetzt, frueher, max) {
+  const b = (v) => Math.max(2, Math.min(100, (v / max) * 100)).toFixed(1);
+  return `<span class="tw-zwei"><i class="jetzt" style="width:${b(jetzt)}%"></i><i class="frueher" style="width:${frueher ? b(frueher) : 0}%"></i></span>`;
+}
+
+Object.assign(KACHELN, {
+  'w-kopf': {
+    titel: 'Kurs & Lage', ziel: '#chartanalyse', min: [4, 2], std: [6, 2], bezug: ['wert', 'richtung'], nurBezug: true,
+    titelMit: (c) => c.name, vorOeffnen: twMerkeChart,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.ticker) {
+        const m = await tafelApi(`/api/richtung/mitglieder?id=${encodeURIComponent(ctx.id)}`);
+        if (m.fehler) { box.innerHTML = `<p class="tf-unter">${esc(m.fehler)}</p>`; return; }
+        const v = m.korb.veraenderung ?? {};
+        box.innerHTML = `<div class="tw-kopf"><div><p class="tf-zahl">${twProz(v.tag)}</p>
+          <p class="tw-reihe">${[['Woche', v.woche], ['Monat', v.monat], ['3 Mon.', v['3m']], ['Jahr', v.jahr]].map(([n, x]) => `<span>${n} <b class="${klasse(x)}">${twProz(x)}</b></span>`).join('')}</p>
+          <p class="tf-unter">Gleichgewichteter Korb aus ${m.werte.length} Werten, heute · Schlusskurse ${esc(m.stand ?? '')}, Yahoo</p></div>
+          <div class="tf-mini">${mfMini(m.korb.werte.slice(-126))}<span class="tf-unter">6 Monate</span></div></div>`;
+        return;
+      }
+      const [k, m] = await Promise.all([tafelApi(`/api/chart/kerzen?ticker=${encodeURIComponent(ctx.ticker)}&intervall=1d`), tafelApi(`/api/chart/mini?ticker=${encodeURIComponent(ctx.ticker)}`).catch(() => ({}))]);
+      const c = k.c ?? [];
+      if (c.length < 2) { box.innerHTML = '<p class="tf-unter">Keine Kurse bei Yahoo.</p>'; return; }
+      const ver = (n) => (c.length > n ? (c.at(-1) / c.at(-1 - n) - 1) * 100 : null);
+      const teile = [['Tag', ver(1)], ['Woche', ver(5)], ['Monat', ver(21)], ['3 Mon.', ver(63)], ['Jahr', ver(252)]].filter(([, v]) => v !== null);
+      const zusatz = [];
+      if (m.sigma_heute !== undefined && m.sigma_heute !== null) zusatz.push(`letzter Tag ${ggVz(m.sigma_heute, gz1)} σ`);
+      if (m.abstand_hoch52 !== undefined) zusatz.push(`${twProz(m.abstand_hoch52, gz0)} zum 52-Wochen-Hoch`);
+      if (m.bb_perzentil !== undefined && m.bb_perzentil !== null) zusatz.push(`Bandbreite ${gz0.format(m.bb_perzentil)}. Perzentil${m.kompression ? ' (eng, Kompression)' : ''}`);
+      box.innerHTML = `<div class="tf-mf tw-kopf" data-mf="${esc(ctx.ticker)}" data-mf-name="${esc(ctx.name)}" role="button" tabindex="0" title="Chart öffnen">
+        <div><p class="tf-zahl">${twZahl(c.at(-1))}</p>
+        <p class="tw-reihe">${teile.map(([n, v]) => `<span>${n} <b class="${klasse(v)}">${twProz(v)}</b></span>`).join('')}</p>
+        <p class="tf-unter">${zusatz.join(' · ')}${zusatz.length ? ' · ' : ''}Schluss ${esc(k.t.at(-1))}, Yahoo (verzögert)</p></div>
+        <div class="tf-mini">${mfMini(c.slice(-126))}<span class="tf-unter">6 Monate</span></div></div>`;
+    },
+  },
+  'w-position': {
+    titel: 'Meine Position', ziel: '#thesen', min: [3, 3], std: [4, 4], bezug: ['wert'], nurBezug: true,
+    passt: (c) => c.art === 'wert',
+    async zeige(box, w, h, ctx) {
+      const d = await tafelApi(`/api/bezug/meins?ticker=${encodeURIComponent(ctx.ticker)}`);
+      const teile = [];
+      if (d.position) {
+        const p = d.position;
+        teile.push(`<p class="tf-zahl">${twZahl(p.wert_eur, gz0)} €</p><p class="tf-unter">${twZahl(p.stueck, gz2)} Stück${d.einstand ? ` · Einstand ${twZahl(d.einstand)}` : ''} · <span class="${klasse(p.gv_prozent)}">${twProz(p.gv_prozent)} (${ggVz(p.gv_eur, gz0)} €)</span></p>`);
+      } else teile.push('<p class="tf-unter">Nicht im Depot.</p>');
+      const zeilen = [];
+      for (const l of d.level ?? []) {
+        const ab = d.kurs ? (l.preis / d.kurs - 1) * 100 : null;
+        zeilen.push(`<div><span>${esc(l.name)}</span><em>${twZahl(l.preis)}</em><b class="${klasse(ab)}">${twProz(ab)}</b></div>`);
+      }
+      for (const a of d.alarme ?? []) zeilen.push(`<div><span>Alarm ${a.richtung === 'ueber' ? 'über' : 'unter'}</span><em>${twZahl(a.preis)}</em><b class="${a.erreicht ? 'plus' : ''}">${a.erreicht ? 'erreicht' : twProz(a.abstand)}</b></div>`);
+      if (zeilen.length) teile.push(`<div class="tf-liste">${zeilen.join('')}</div>`);
+      for (const t of d.thesen ?? []) teile.push(`<p class="tf-unter tw-these"><b>These:</b> ${esc(t.kernthese ?? t.name)}</p>`);
+      if (d.szenarien?.length) teile.push(`<p class="tf-unter">Szenarien: ${d.szenarien.map((s) => `<a href="#szenario">${esc(s.name)} (bis ${esc(s.datum)})</a>`).join(', ')}</p>`);
+      if (!d.position && !zeilen.length && !d.thesen?.length) teile.push('<p class="tf-unter">Keine These, keine Exit-Level und keine Preisalarme zu diesem Wert.</p>');
+      box.innerHTML = teile.join('') + (d.kurs ? `<p class="tf-unter">Level und Kurs (${twZahl(d.kurs)}) in Handelswährung, Abstand vom letzten Schluss.</p>` : '');
+    },
+  },
+  'w-chart': {
+    titel: 'Chartanalyse kurz', ziel: '#chartanalyse', min: [3, 3], std: [4, 3], bezug: ['wert', 'richtung'], nurBezug: true, vorOeffnen: twMerkeChart,
+    passt: (c) => !!c.ticker,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.ticker) { box.innerHTML = '<p class="tf-unter">Ein Korb ohne eigenen Kurs hat keine Chartanalyse.</p>'; return; }
+      const d = await tafelApi(`/api/chart/analyse?ticker=${encodeURIComponent(ctx.ticker)}`);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const t = d.trend ?? {}, mo = d.momentum ?? {};
+      const z = [];
+      if (d.naechster_widerstand) z.push(['Nächster Widerstand', twZahl(d.naechster_widerstand.mitte), twProz(d.naechster_widerstand.abstand)]);
+      if (d.naechste_unterstuetzung) z.push(['Nächste Unterstützung', twZahl(d.naechste_unterstuetzung.mitte), twProz(d.naechste_unterstuetzung.abstand)]);
+      if (t.abstand200 !== undefined) z.push(['200-Tage-Linie', twZahl(t.sma200), twProz(t.abstand200)]);
+      if (mo.rsi !== undefined) z.push(['RSI 14', '', twZahl(mo.rsi, gz0)]);
+      if (mo.rvol !== undefined) z.push(['Volumen gegen üblich', '', `${twZahl(mo.rvol, gz1)}×`]);
+      const ereignis = (d.ereignisse ?? []).at(-1);
+      box.innerHTML = `<p class="tf-zahl tw-klein">${esc(t.regime ?? '–')}</p><p class="tf-unter">${esc(d.struktur?.text ?? '')}</p>
+        <div class="tf-liste">${z.slice(0, tafelZeilen(h, 26, 60)).map(([n, p, a]) => `<div><span>${n}</span><em>${p}</em><b>${a}</b></div>`).join('')}</div>
+        ${ereignis && h > 3 ? `<p class="tf-unter">${esc(ereignis.datum)}: ${esc(ereignis.text)}</p>` : ''}`;
+    },
+  },
+  'w-erwartet': {
+    titel: 'Erwartete Bewegung', ziel: '#chancen', min: [3, 4], std: [4, 4], bezug: ['wert', 'richtung'], nurBezug: true,
+    passt: (c) => !!c.optionen,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.optionen) { box.innerHTML = twKeineOptionen(ctx); return; }
+      const aktie = ctx.art === 'wert' && ctx.typ === 'aktie' && !ctx.optionen_vertreten ? `&aktie=${encodeURIComponent(ctx.ticker)}` : '';
+      const d = await tafelApi(`/api/erwartet?ticker=${encodeURIComponent(ctx.optionen)}${aktie}`);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const zeilen = [];
+      if (d.morgen) zeilen.push({ n: d.morgen.genau ? 'Bis morgen' : `Je Handelstag bis ${datumKurz(d.morgen.verfall)}`, v: d.morgen.prozent, f: d.morgen.hist?.mittel, a: d.morgen.hist?.anteil_groesser });
+      if (d.monat) zeilen.push({ n: `Bis ${datumKurz(d.monat.verfall)} (${d.monat.tage} Handelstage)`, v: d.monat.prozent, f: d.monat.hist?.mittel, a: d.monat.hist?.anteil_groesser });
+      if (d.zahlen) zeilen.push({ n: `Zahlen ${datumKurz(d.zahlen.datum)}`, v: d.zahlen.prozent, f: d.zahlen.hist_mittel, zahlen: d.zahlen });
+      const max = Math.max(...zeilen.flatMap((z) => [z.v ?? 0, z.f ?? 0]), 0.1);
+      const erst = zeilen[0];
+      const verh = erst?.v && erst?.f ? erst.v / erst.f : null;
+      const fazit = verh === null ? '' : verh > 1.3 ? 'Die Optionen preisen mehr Bewegung ein als üblich.' : verh < 0.8 ? 'Die Optionen preisen weniger Bewegung ein als üblich.' : 'Die Optionen preisen etwa die übliche Bewegung ein.';
+      box.innerHTML = `${fazit ? `<p class="tw-fazit">${fazit}</p>` : ''}<div class="tw-erwartet">${zeilen.map((z) => `<div><span>${esc(z.n)}</span>
+          <b>${z.v !== null && z.v !== undefined ? `±${gz1.format(z.v)} %` : '–'}</b>${twZweiBalken(z.v ?? 0, z.f, max)}
+          <small>${z.f ? `früher im Schnitt ±${gz1.format(z.f)} %` : ''}${z.a !== undefined && z.a !== null ? ` · in ${gz0.format(z.a)} % der Fälle mehr` : ''}${z.zahlen && (z.v === null || z.v === undefined) ? (z.zahlen.tage > 14 ? ' · eingepreist erst ab 14 Tagen vorher sinnvoll' : ' · nicht sauber trennbar') : ''}${z.zahlen?.hist_n ? ` (n = ${z.zahlen.hist_n})` : ''}</small></div>`).join('')}</div>
+        <p class="tf-unter">Straddle am Geld${d.aus_letzten ? ' aus den letzten Handelskursen (Markt geschlossen)' : ''}, ${esc(d.ticker)} · Richtung offen · Yahoo, Stand ${tafelZeit(d.stand)} Uhr</p>${twVertreten(ctx)}`;
+    },
+  },
+  'w-spanne': {
+    titel: 'Kursspanne laut Optionen', ziel: '#chancen', min: [3, 3], std: [4, 4], bezug: ['wert', 'richtung'], nurBezug: true,
+    passt: (c) => !!c.optionen,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.optionen) { box.innerHTML = twKeineOptionen(ctx); return; }
+      const d = await tafelApi(`/api/wahrscheinlichkeit?ticker=${encodeURIComponent(ctx.optionen)}`);
+      if (d.fehler || !d.verfaelle?.length) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler ?? 'Keine Verteilung verfügbar.')}</p>`; return; }
+      const ziele = [[30, '1 Monat'], [91, '3 Monate'], [182, '6 Monate'], [365, '1 Jahr']];
+      const reihen = [];
+      for (const [tage, name] of ziele) {
+        const v = d.verfaelle.reduce((a, b) => (Math.abs(b.tage - tage) < Math.abs(a.tage - tage) ? b : a));
+        if (Math.abs(v.tage - tage) > tage * 0.5 || reihen.some((r) => r.v === v)) continue;
+        reihen.push({ name, v, p: ['q5', 'q25', 'q50', 'q75', 'q95'].map((q) => (v[q] / d.kurs - 1) * 100) });
+      }
+      const lo = Math.min(...reihen.map((r) => r.p[0]), -5), hi = Math.max(...reihen.map((r) => r.p[4]), 5);
+      const x = (v) => ((v - lo) / (hi - lo)) * 100;
+      box.innerHTML = `<div class="tw-spanne">${reihen.slice(0, Math.max(2, tafelZeilen(h, 42, 50))).map((r) => `<div><span>${r.name}</span><small>${twProz(r.p[0], gz0)} … ${twProz(r.p[4], gz0)}</small><span class="tw-sp-bahn">
+          <i class="aussen" style="left:${x(r.p[0])}%;width:${x(r.p[4]) - x(r.p[0])}%"></i><i class="innen" style="left:${x(r.p[1])}%;width:${x(r.p[3]) - x(r.p[1])}%"></i>
+          <i class="mitte" style="left:${x(r.p[2])}%"></i><i class="null" style="left:${x(0)}%"></i></span></div>`).join('')}</div>
+        <p class="tf-unter">Hell: 90 % der Wahrscheinlichkeit, kräftig: mittlere Hälfte, Strich: Median, Linie: heutiger Kurs. Risikoneutral, also keine Prognose. ${esc(d.ticker)}, Yahoo.</p>${twVertreten(ctx)}`;
+    },
+  },
+  'w-vola': {
+    titel: 'Schwankung', ziel: '#vola', min: [3, 3], std: [3, 3], bezug: ['wert', 'richtung'], nurBezug: true, vorOeffnen: twMerkeGamma,
+    passt: (c) => !!c.ticker,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.ticker) { box.innerHTML = '<p class="tf-unter">Ein Korb ohne eigenen Kurs hat keine eigene Schwankung.</p>'; return; }
+      const d = await tafelApi(`/api/schwankung?ticker=${encodeURIComponent(ctx.ticker)}`);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const k20 = (d.kegel ?? []).find((k) => k.fenster === 20) ?? d.kegel?.[0];
+      const z = [];
+      if (k20) z.push(`<div><span>Perzentil (3 J.)</span>${balken((k20.perzentil ?? 0) / 100, k20.perzentil > 80 ? 'minus' : '')}<b>${twZahl(k20.perzentil, gz0)}</b></div>`);
+      if (d.iv?.atm30) z.push(`<div><span>Implizit 30 T.</span><em></em><b>${twZahl(d.iv.atm30, gz0)} %</b></div><div><span>IV ÷ realisiert</span><em></em><b>${twZahl(d.iv.verhaeltnis, gz2)}×</b></div>`);
+      if (d.iv?.rang !== null && d.iv?.rang !== undefined) z.push(`<div><span>IV-Rang</span><em></em><b>${twZahl(d.iv.rang, gz0)}</b></div>`);
+      if (d.atr_prozent) z.push(`<div><span>ATR 14</span><em>${twZahl(d.atr)}</em><b>${twZahl(d.atr_prozent, gz1)} %</b></div>`);
+      box.innerHTML = `<p class="tf-zahl">${twZahl(d.rv?.['20'], gz0)} %</p><p class="tf-unter">realisiert, 20 Tage, aufs Jahr gerechnet</p><div class="tf-liste">${z.join('')}</div>`;
+    },
+  },
+  'w-optionen': {
+    titel: 'Optionen & Short', ziel: '#chartanalyse', min: [3, 3], std: [4, 3], bezug: ['wert', 'richtung'], nurBezug: true, vorOeffnen: twMerkeChart,
+    passt: (c) => !!c.optionen || (c.art === 'wert' && c.typ === 'aktie'),
+    async zeige(box, w, h, ctx) {
+      const t = ctx.optionen ?? ctx.ticker;
+      if (!t) { box.innerHTML = twKeineOptionen(ctx); return; }
+      const d = await tafelApi(`/api/optionen?ticker=${encodeURIComponent(t)}`);
+      const o = d.optionen, s = d.short;
+      const z = [];
+      if (o) {
+        z.push(['Put/Call (Volumen)', twZahl(o.pcr_vol, gz2)], ['Put/Call (offen)', twZahl(o.pcr_oi, gz2)]);
+        const v = o.verfaelle?.[0];
+        if (v?.max_pain) z.push([`Max Pain ${datumKurz(v.verfall)}`, twZahl(v.max_pain)]);
+        if (o.auffaellig?.length) z.push(['Auffällige Aufträge', `${o.auffaellig.length}, größter: ${o.auffaellig[0].art} ${twZahl(o.auffaellig[0].strike)}`]);
+      }
+      if (s) {
+        if (s.anteil_float !== null && s.anteil_float !== undefined) z.push(['Short vom Streubesitz', `${twZahl(s.anteil_float, gz1)} %`]);
+        if (s.days_to_cover) z.push(['Tage zum Eindecken', twZahl(s.days_to_cover, gz1)]);
+        if (s.veraenderung !== null && s.veraenderung !== undefined) z.push(['Short zum Vormonat', twProz(s.veraenderung)]);
+      }
+      box.innerHTML = z.length ? `<div class="tf-liste">${z.slice(0, tafelZeilen(h, 26, 20)).map(([n, v]) => `<div><span>${n}</span><b>${v}</b></div>`).join('')}</div><p class="tf-unter">${esc(t)} · Yahoo${s?.stand ? `, Short-Stand ${esc(s.stand)}` : ''}</p>`
+        : `<p class="tf-unter">Yahoo liefert für ${esc(t)} gerade keine Options- und Short-Daten${d.spread?.grund ? ` (${esc(d.spread.grund)})` : ''}.</p>`;
+    },
+  },
+  'w-news': {
+    titel: 'News dazu', ziel: '#news', min: [3, 3], std: [6, 4], bezug: ['wert', 'richtung'], nurBezug: true,
+    async zeige(box, w, h, ctx) {
+      const d = await tafelApi('/api/nachrichten/geschichten?stunden=72');
+      const werte = new Set(ctx.art === 'wert' ? [ctx.ticker] : ctx.mitglieder ?? []);
+      let liste, quelle;
+      if (ctx.art === 'wert' && ctx.typ !== 'aktie') { liste = d.markt ?? []; quelle = 'Markt bewegend (für Indizes, Futures und Anlageklassen)'; }
+      else if (werte.size) { liste = (d.alle ?? []).filter((s) => (s.ticker ?? []).some((t) => werte.has(t))); quelle = ctx.art === 'wert' ? `Geschichten mit ${ctx.ticker}` : 'Geschichten mit Werten dieser Richtung'; }
+      else { liste = d.markt ?? []; quelle = 'Markt bewegend'; }
+      liste = [...liste].sort((a, b) => b.erstes.localeCompare(a.erstes));
+      const n = tafelZeilen(h, 40, 24);
+      box.innerHTML = liste.length ? `<div class="tw-news">${liste.slice(0, n).map((s) => {
+        const link = s.meldungen?.find((m) => m.link)?.link;
+        return `<div><time>${tafelTagZeit(s.erstes)}</time><span>${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(s.titel)}</a>` : esc(s.titel)}</span><small>${s.anzahl > 1 ? `${s.anzahl} Meldungen · ` : ''}${gz0.format(s.score)}</small></div>`;
+      }).join('')}</div><p class="tf-unter">${esc(quelle)}, letzte 3 Tage</p>` : `<p class="tf-unter">Keine Geschichten in den letzten 3 Tagen (${esc(quelle)}).</p>`;
+    },
+  },
+  'w-zahlen': {
+    titel: 'Quartalszahlen', ziel: '#earnings-moves', min: [3, 3], std: [4, 3], bezug: ['wert'], nurBezug: true,
+    passt: (c) => c.art === 'wert' && c.typ === 'aktie',
+    async zeige(box, w, h, ctx) {
+      if (twNurAktie(ctx)) { box.innerHTML = '<p class="tf-unter">Quartalszahlen gibt es nur bei Aktien.</p>'; return; }
+      const [d, dr] = await Promise.all([tafelApi(`/api/chart/earnings?ticker=${encodeURIComponent(ctx.ticker)}`), tafelApi(`/api/drift/wert?ticker=${encodeURIComponent(ctx.ticker)}`).catch(() => ({}))]);
+      const t = d.termine ?? [];
+      const naechster = t.find((x) => x.zukunft);
+      const alt = t.filter((x) => !x.zukunft && x.reaktion !== null && x.reaktion !== undefined).slice(-8);
+      const max = Math.max(...alt.map((x) => Math.abs(x.reaktion)), 1);
+      const e = dr.einordnung;
+      box.innerHTML = `${naechster ? `<p class="tf-zahl tw-klein">${datumKurz(naechster.datum)}${naechster.sitzung ? ` <span class="tf-unter">${esc(naechster.sitzung)}</span>` : ''}</p><p class="tf-unter">Nächste Zahlen${naechster.eps_erwartet !== null && naechster.eps_erwartet !== undefined ? `, EPS erwartet ${twZahl(naechster.eps_erwartet)}` : ''}</p>` : '<p class="tf-unter">Kein nächster Termin bekannt.</p>'}
+        ${alt.length ? `<div class="tw-reaktionen" title="Kursreaktion an den letzten Terminen">${alt.map((x) => `<span title="${esc(x.datum)}: ${twProz(x.reaktion)}, Überraschung ${twProz(x.ueberraschung)}"><i class="${x.reaktion >= 0 ? 'plus' : 'minus'}${(x.ueberraschung ?? 0) >= 0 ? '' : ' verfehlt'}" style="height:${Math.max(4, (Math.abs(x.reaktion) / max) * 50)}%"></i></span>`).join('')}</div>
+          <p class="tf-unter">Reaktion der letzten ${alt.length} Termine, Ø Betrag ±${gz1.format(alt.reduce((a, x) => a + Math.abs(x.reaktion), 0) / alt.length)} %${e?.anzahl >= 8 ? ` · danach meist ${esc(e.urteil)} (${gz0.format(e.fortsetzung)} % Fortsetzung, n = ${e.anzahl})` : ''}</p>` : ''}`;
+    },
+  },
+  'w-relativ': {
+    titel: 'Gegen die Branche', ziel: '#relativ', min: [3, 2], std: [4, 3], bezug: ['wert'], nurBezug: true,
+    passt: (c) => c.art === 'wert' && c.typ === 'aktie',
+    titelMit: () => 'Gegen die Branche',
+    async zeige(box, w, h, ctx) {
+      const d = await tafelApi(`/api/relativ?extra=${encodeURIComponent(ctx.ticker)}&depot=false`);
+      const a = (d.aktien ?? []).find((x) => x.ticker === ctx.ticker);
+      if (!a) { box.innerHTML = `<p class="tf-unter">Für ${esc(ctx.name)} ist keine Branche bekannt (ETFs, Indizes, Futures).</p>`; return; }
+      const namen = { tag: 'Heute', woche: 'Woche', monat: 'Monat', '3m': '3 Monate', jahr: 'Jahr' };
+      const z = Object.entries(namen).map(([k, n]) => [n, a.zeitraeume?.[k]?.relativ]).filter(([, v]) => v !== null && v !== undefined);
+      const max = Math.max(...z.map(([, v]) => Math.abs(v)), 1);
+      box.innerHTML = `<div class="tw-divergent">${z.slice(0, tafelZeilen(h, 24, 20)).map(([n, v]) => `<div><span>${n}</span><span class="tw-div-bahn"><i class="${klasse(v)}" style="${v >= 0 ? 'left:50%' : `left:${50 - (Math.abs(v) / max) * 50}%`};width:${(Math.abs(v) / max) * 50}%"></i></span><b class="${klasse(v)}">${ggVz(v, gz1)} Pp.</b></div>`).join('')}</div>
+        <p class="tf-unter">Vorsprung gegen ${esc(a.name_branche ?? a.etf)} (${esc(a.etf)}) in Prozentpunkten, in Euro</p>`;
+    },
+  },
+  'w-rsi': {
+    titel: 'RSI: was danach geschah', ziel: '#chartanalyse', min: [3, 3], std: [4, 3], bezug: ['wert', 'richtung'], nurBezug: true, vorOeffnen: twMerkeChart,
+    passt: (c) => !!c.ticker,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.ticker) { box.innerHTML = '<p class="tf-unter">Ein Korb ohne eigenen Kurs hat keinen RSI.</p>'; return; }
+      const d = await tafelApi(`/api/chart/rsi?ticker=${encodeURIComponent(ctx.ticker)}`);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const r = d.rsi_heute;
+      const zone = r >= 70 ? ['über 70', 'minus'] : r <= 30 ? ['unter 30', 'plus'] : ['dazwischen', ''];
+      const zeile = (art, name) => {
+        const x = d.arten?.[art]?.horizonte?.['20'];
+        if (!x) return '';
+        return `<div><span>${name} (n = ${x.n})</span><em>${twProz(x.mittel)}</em><b class="${x.p < 0.05 ? 'tw-auffaellig' : ''}">${x.p < 0.05 ? 'auffällig' : 'Zufall möglich'}</b></div>`;
+      };
+      box.innerHTML = `<p class="tf-zahl">${twZahl(r, gz0)} <span class="tf-marke ${zone[1]}">${zone[0]}</span></p>
+        <div class="tf-liste">${zeile('oben', 'Nach RSI über 70')}${zeile('unten', 'Nach RSI unter 30')}<div><span>Normal</span><em>${twProz(d.normal?.['20']?.mittel)}</em><b></b></div></div>
+        <p class="tf-unter">Kurs 20 Handelstage danach, ${esc(d.von?.slice(0, 4) ?? '')}–heute</p>`;
+    },
+  },
+  'w-insider': {
+    titel: 'Insider', ziel: '#fonds', min: [3, 3], std: [4, 3], bezug: ['wert'], nurBezug: true,
+    passt: (c) => c.art === 'wert' && c.typ === 'aktie' && !c.ticker.includes('.'),
+    async zeige(box, w, h, ctx) {
+      if (twNurAktie(ctx) || ctx.ticker.includes('.')) { box.innerHTML = '<p class="tf-unter">Insider-Meldungen (Form 4) gibt es nur für US-Aktien.</p>'; return; }
+      const d = await tafelApi(`/api/gg/fonds?extra=${encodeURIComponent(ctx.ticker)}&depot=false`);
+      const f = (d.firmen ?? []).find((x) => x.ticker === ctx.ticker);
+      const i = f?.insider;
+      if (!i || i.fehler) { box.innerHTML = `<p class="tf-unter">Keine Insider-Daten${i?.fehler ? ` (${esc(i.fehler)})` : ''}.</p>`; return; }
+      const zeilen = (i.zeilen ?? []).slice(0, Math.max(1, tafelZeilen(h, 26, 80)));
+      const mio = (v) => (v ? ggMio(v / 1e6) : 'keine');
+      box.innerHTML = `<p class="tw-reihe"><span>Käufe <b class="${i.kauf_summe ? 'plus' : ''}">${mio(i.kauf_summe)}</b></span><span>Verkäufe <b class="${i.verkauf_summe ? 'minus' : ''}">${mio(i.verkauf_summe)}</b></span>${i.verkauf_summe ? `<span>davon nach Plan <b>${mio(i.verkauf_geplant)}</b></span>` : ''}</p>
+        ${i.gruppenkauf ? '<p class="tw-fazit">Mehrere Insider haben gekauft.</p>' : ''}
+        <div class="tf-liste">${zeilen.map((z) => `<div><span>${esc(z.datum)} ${esc(z.wer)}</span><em class="${z.art === 'Kauf' ? 'plus' : 'minus'}">${esc(z.art)}${z.plan ? ' (Plan)' : ''}</em><b>${ggMio(z.wert / 1e6)}</b></div>`).join('')}</div>
+        <p class="tf-unter">SEC Form 4, ${i.tage} Tage${f.gross?.length ? ` · ${f.gross.length} Meldungen über 5 % (13D/G)` : ''}</p>`;
+    },
+  },
+  'w-fund': {
+    titel: 'Bewertung gegen Peers', ziel: '#fundament', min: [3, 3], std: [4, 3], bezug: ['wert'], nurBezug: true,
+    passt: (c) => c.art === 'wert' && c.typ === 'aktie',
+    async zeige(box, w, h, ctx) {
+      if (twNurAktie(ctx)) { box.innerHTML = '<p class="tf-unter">Der Peer-Vergleich gibt es nur für Aktien.</p>'; return; }
+      const d = await tafelApi(`/api/fund/kachel?ticker=${encodeURIComponent(ctx.ticker)}`);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      box.innerHTML = `${d.satz ? `<p class="tw-fazit">${esc(d.satz)}</p>` : ''}<div class="tf-liste">${(d.top ?? []).map((t) => `<div><span>${esc(t.name)}</span><em>${fuWert(t.wert, t.einheit)}</em><b class="${(t.hoeher_besser ? t.abweichung : -t.abweichung) >= 0 ? 'plus' : 'minus'}">${twProz(t.abweichung, gz0)}</b></div>`).join('')}</div>
+        <p class="tf-unter">Gegen den Median von ${d.anzahl} Werten (${esc(d.gruppe?.name ?? '')})</p>`;
+    },
+  },
+  'w-volumen': {
+    titel: 'Volumen-Zonen', ziel: '#volumen', min: [3, 2], std: [4, 3], bezug: ['wert', 'richtung'], nurBezug: true,
+    passt: (c) => !!c.ticker,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.ticker) { box.innerHTML = '<p class="tf-unter">Ein Korb ohne eigenen Kurs hat kein Volumenprofil.</p>'; return; }
+      const d = await tafelApi(`/api/volumen?ticker=${encodeURIComponent(ctx.ticker)}&zeitraum=1m&extra=${encodeURIComponent(ctx.ticker)}&depot=false`);
+      const p = d.profil;
+      if (d.fehler || !p) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler ?? 'Kein Volumenprofil verfügbar.')}</p>`; return; }
+      const kurs = d.schluss ?? d.kurs;
+      const x = (v) => Math.max(0, Math.min(100, ((v - p.tief) / (p.hoch - p.tief)) * 100));
+      const lage = kurs > p.va_oben ? 'über der Zone mit dem meisten Handel' : kurs < p.va_unten ? 'unter der Zone mit dem meisten Handel' : 'mitten in der Zone mit dem meisten Handel';
+      box.innerHTML = `<p class="tw-fazit">Der Kurs steht ${lage}.</p>
+        <div class="tw-va"><i class="va" style="left:${x(p.va_unten)}%;width:${x(p.va_oben) - x(p.va_unten)}%"></i><i class="poc" style="left:${x(p.poc)}%"></i><i class="kurs" style="left:${x(kurs)}%"></i></div>
+        <div class="tf-liste"><div><span>Meistgehandelt (POC)</span><b>${twZahl(p.poc)}</b></div><div><span>Value Area (70 %)</span><b>${twZahl(p.va_unten)} – ${twZahl(p.va_oben)}</b></div>${d.rvol?.faktor ? `<div><span>Volumen gegen üblich</span><b>${twZahl(d.rvol.faktor, gz1)}×</b></div>` : ''}</div>
+        <p class="tf-unter">Letzter Monat, 5-Minuten-Kerzen, Yahoo</p>`;
+    },
+  },
+});
+
+// ---- Ähnliche Werte (Arbeitsplätze): Verlauf überlagert oder als kleine Charts mit gleicher Achse ----
+const twAeh = { zeitraum: '3m', ansicht: 'linien' };
+try { Object.assign(twAeh, JSON.parse(localStorage.getItem('twAeh') || '{}')); } catch {}
+const TW_AEH_ZEIT = [['1m', '1 M.'], ['3m', '3 M.'], ['6m', '6 M.'], ['1j', '1 J.']];
+async function twDepotTicker() {
+  try { return new Set(((await tafelApi('/api/portfolio')).positionen ?? []).map((p) => p.ticker).filter(Boolean)); } catch { return new Set(); }
+}
+// Endbeschriftungen rechts so verschieben, dass sie sich nicht überlappen
+function twEtiketten(liste, abstand, oben, unten) {
+  const s = [...liste].sort((a, b) => a.y - b.y);
+  for (let i = 1; i < s.length; i++) if (s[i].y - s[i - 1].y < abstand) s[i].y = s[i - 1].y + abstand;
+  const ueber = s.length ? s.at(-1).y - unten : 0;
+  if (ueber > 0) s.forEach((x) => { x.y -= ueber; });
+  for (let i = s.length - 2; i >= 0; i--) if (s[i + 1].y - s[i].y < abstand) s[i].y = s[i + 1].y - abstand;
+  s.forEach((x) => { x.y = Math.max(oben, x.y); });
+  return s;
+}
+function twLinienBild(breite, hoehe, daten, reihen, opts = {}) {
+  const rechts = opts.etiketten ? 88 : 6, links = 34, oben = 8, unten = 18;
+  const alle = reihen.flatMap((r) => r.werte);
+  const lo = opts.lo ?? Math.min(...alle), hi = opts.hi ?? Math.max(...alle);
+  const pad = (hi - lo) * 0.06 || 1;
+  const x = d3.scaleLinear([0, daten.length - 1], [links, breite - rechts]);
+  const y = d3.scaleLinear([lo - pad, hi + pad], [hoehe - unten, oben]);
+  const linie = d3.line().defined((v) => v !== null && v !== undefined).x((_, i) => x(i)).y((v) => y(v));
+  const ticks = y.ticks(3);
+  const nullY = opts.nullwert !== undefined ? y(opts.nullwert) : null;
+  let svg = `<svg class="tw-linien" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}">`;
+  svg += ticks.map((t) => `<g class="tw-gitter"><line x1="${links}" x2="${breite - rechts}" y1="${y(t)}" y2="${y(t)}"/><text x="${links - 6}" y="${y(t) + 3}">${opts.format ? opts.format(t) : gz0.format(t)}</text></g>`).join('');
+  if (nullY !== null) svg += `<line class="tw-null" x1="${links}" x2="${breite - rechts}" y1="${nullY}" y2="${nullY}"/>`;
+  if (opts.marke !== undefined) svg += `<line class="tw-marke" x1="${x(opts.marke)}" x2="${x(opts.marke)}" y1="${oben}" y2="${hoehe - unten}"/>`;
+  if (opts.achse) svg += opts.achse.map(([i, t]) => `<text class="tw-achse" x="${x(i)}" y="${hoehe - 4}">${esc(t)}</text>`).join('');
+  for (const r of [...reihen].sort((a, b) => (a.rang ?? 0) - (b.rang ?? 0))) svg += `<path class="tw-l ${r.klasse}" d="${linie(r.werte)}"><title>${esc(r.titel ?? r.name)}</title></path>`;
+  if (opts.etiketten) {
+    const et = twEtiketten(reihen.map((r) => ({ r, y: y(r.werte.filter((v) => v !== null).at(-1)) })), 11, oben + 4, hoehe - unten);
+    svg += et.map(({ r, y: yy }) => `<text class="tw-ende ${r.klasse}" x="${breite - rechts + 6}" y="${yy + 3}">${esc(r.name)} ${opts.ende ? opts.ende(r) : ''}</text>`).join('');
+  }
+  return `${svg}</svg>`;
+}
+
+Object.assign(KACHELN, {
+  'w-aehnlich': {
+    titel: 'Ähnliche Werte im Verlauf', ziel: '#fundament', min: [4, 3], std: [8, 4], bezug: ['wert', 'richtung'], nurBezug: true,
+    async zeige(box, w, h, ctx) {
+      const [d, depot] = await Promise.all([tafelApi(`/api/aehnlich?id=${encodeURIComponent(ctx.id)}&zeitraum=${twAeh.zeitraum}`), twDepotTicker()]);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      if (d.werte.length < 2) { box.innerHTML = `<p class="tf-unter">Keine ähnlichen Werte gefunden (${esc(d.quelle)}).</p>`; return; }
+      const art = (t) => (t.basis ? 'basis' : depot.has(t.ticker) ? 'eigen' : 'andere');
+      const reihen = d.werte.map((t, i) => ({ name: t.ticker, titel: `${t.name}: ${twProz(t.veraenderung)}`, werte: d.verlauf.reihen[t.ticker], klasse: art(t), rang: t.basis ? 3 : depot.has(t.ticker) ? 2 : 1, i }));
+      const breite = Math.max(260, box.clientWidth), gesamtH = h * TAFEL_ZEILE + (h - 1) * TAFEL_ABSTAND - 76;
+      const mitTabelle = w >= 6 && h >= 4;
+      const tabZeilen = mitTabelle ? Math.min(d.werte.length, Math.max(3, Math.floor((gesamtH - 230) / 22))) : 0;
+      const bildH = Math.max(120, gesamtH - 64 - (mitTabelle ? tabZeilen * 22 + 26 : 0));
+      const achse = [[0, datumKurz(d.verlauf.daten[0])], [d.verlauf.daten.length - 1, datumKurz(d.verlauf.daten.at(-1))]];
+      const steuer = `<div class="tw-steuer">${TW_AEH_ZEIT.map(([k, n]) => `<button type="button" class="tw-knopf" data-tw-zeit="${k}" aria-pressed="${k === twAeh.zeitraum}">${n}</button>`).join('')}
+        <span class="tw-trenner"></span><button type="button" class="tw-knopf" data-tw-ansicht="linien" aria-pressed="${twAeh.ansicht === 'linien'}">Überlagert</button><button type="button" class="tw-knopf" data-tw-ansicht="klein" aria-pressed="${twAeh.ansicht === 'klein'}">Einzeln</button></div>`;
+      let bild;
+      if (twAeh.ansicht === 'klein') {
+        const alle = reihen.flatMap((r) => r.werte);
+        const lo = Math.min(...alle), hi = Math.max(...alle);
+        const basis = reihen.find((r) => r.klasse === 'basis');
+        const andere = reihen.filter((r) => r !== basis);
+        const spalten = Math.max(2, Math.min(4, Math.floor(breite / 150)));
+        const zeilen = Math.ceil(andere.length / spalten);
+        const kb = Math.floor((breite - (spalten - 1) * 8) / spalten), kh = Math.max(70, Math.floor((bildH - (zeilen - 1) * 8) / zeilen));
+        bild = `<div class="tw-klein" style="grid-template-columns:repeat(${spalten}, 1fr)">${andere.map((r) => {
+          const t = d.werte[r.i];
+          return `<div><p><b class="${r.klasse}">${esc(r.name)}</b> <span class="${t.veraenderung >= 0 ? 'plus' : 'minus'}">${twProz(t.veraenderung, gz0)}</span>${t.korrelation !== undefined ? ` <small>ρ ${gz2.format(t.korrelation)}</small>` : ''}</p>${twLinienBild(kb, kh - 18, d.verlauf.daten, [...(basis ? [{ ...basis, klasse: 'basis-hinten', rang: 0 }] : []), r], { lo, hi, nullwert: 100, format: (v) => gz0.format(v - 100) })}</div>`;
+        }).join('')}</div>`;
+      } else {
+        bild = twLinienBild(breite, bildH, d.verlauf.daten, reihen, { etiketten: true, nullwert: 100, achse, format: (v) => `${v >= 100 ? '+' : ''}${gz0.format(v - 100)}`, ende: (r) => twProz(r.werte.at(-1) - 100, gz0) });
+      }
+      const sortiert = [...d.werte].sort((a, b) => (b.basis - a.basis) || (b.korrelation ?? -2) - (a.korrelation ?? -2));
+      const tabelle = mitTabelle ? `<table class="tw-tabelle"><thead><tr><th>Wert</th><th>Veränderung</th><th title="Korrelation der Tagesrenditen, 1 Jahr">Gleichlauf</th><th title="Bewegt sich im Schnitt so viel, wenn der Basiswert sich um 1 bewegt">Beta</th></tr></thead><tbody>${sortiert.slice(0, tabZeilen).map((t) => `<tr class="${art(t)}"><td><span>${esc(t.ticker)}</span> <small>${esc(t.name)}</small></td><td class="${t.veraenderung >= 0 ? 'plus' : 'minus'}">${twProz(t.veraenderung)}</td><td>${t.korrelation !== undefined ? `${balken(Math.max(0, t.korrelation), '')} ${gz2.format(t.korrelation)}` : t.basis ? 'Basis' : '–'}</td><td>${t.beta !== undefined ? gz2.format(t.beta) : ''}</td></tr>`).join('')}</tbody></table>` : '';
+      box.innerHTML = `${steuer}${bild}${tabelle}<p class="tf-unter">${esc(d.quelle)} · Start = 0 % · <span class="tw-l-leg basis">${esc(ctx.ticker ?? ctx.name)}</span> <span class="tw-l-leg eigen">im Depot</span> · Yahoo, Schlusskurse in Handelswährung</p>`;
+      box.querySelectorAll('[data-tw-zeit]').forEach((b) => b.addEventListener('click', () => { twAeh.zeitraum = b.dataset.twZeit; try { localStorage.setItem('twAeh', JSON.stringify(twAeh)); } catch {} this.zeige(box, w, h, ctx); }));
+      box.querySelectorAll('[data-tw-ansicht]').forEach((b) => b.addEventListener('click', () => { twAeh.ansicht = b.dataset.twAnsicht; try { localStorage.setItem('twAeh', JSON.stringify(twAeh)); } catch {} this.zeige(box, w, h, ctx); }));
+    },
+  },
+  'w-aehnlich-zahlen': {
+    titel: 'Ähnliche Werte bei ihren Zahlen', ziel: '#earnings-moves', min: [4, 3], std: [6, 4], bezug: ['wert', 'richtung'], nurBezug: true,
+    passt: (c) => (c.art === 'wert' ? c.typ === 'aktie' : ['Sektoren', 'Themen', 'Gesamtmarkt'].includes(c.gruppe)),
+    async zeige(box, w, h, ctx) {
+      const [d, depot] = await Promise.all([tafelApi(`/api/aehnlich/zahlen?id=${encodeURIComponent(ctx.id)}`), twDepotTicker()]);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      if (!d.werte.length) { box.innerHTML = '<p class="tf-unter">Keiner der ähnlichen Werte hat in den letzten 100 Tagen Zahlen gemeldet (oder es sind keine Aktien).</p>'; return; }
+      const n = d.vor + d.nach + 1;
+      const reihen = d.werte.map((x) => {
+        const werte = Array.from({ length: n }, (_, i) => x.pfad[i] ?? null);
+        return { name: x.ticker, titel: `${x.ticker} ${x.datum}: Reaktion ${twProz(x.reaktion)}`, werte, klasse: x.basis ? 'basis' : depot.has(x.ticker) ? 'eigen' : 'andere', rang: x.basis ? 3 : 1 };
+      });
+      if (d.mittel) reihen.push({ name: 'Ø', titel: 'Durchschnitt der ähnlichen Werte', werte: d.mittel, klasse: 'mittel', rang: 2 });
+      const breite = Math.max(260, box.clientWidth), gesamtH = h * TAFEL_ZEILE + (h - 1) * TAFEL_ABSTAND - 76;
+      const listeH = h >= 4 ? Math.min(d.werte.length, 4) * 22 : 0;
+      const bild = twLinienBild(breite, Math.max(110, gesamtH - 44 - listeH), Array.from({ length: n }), reihen, {
+        etiketten: true, nullwert: 0, marke: d.vor, achse: [[0, `−${d.vor} T.`], [d.vor, 'Zahlen'], [n - 1, `+${d.nach} T.`]],
+        format: (v) => `${v > 0 ? '+' : ''}${gz0.format(v)}`, ende: (r) => twProz(r.werte.filter((v) => v !== null).at(-1), gz0),
+      });
+      const liste = h >= 4 ? `<div class="tf-liste">${[...d.werte].sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 4).map((x) => `<div><span>${esc(x.ticker)} · ${datumKurz(x.datum)}</span><em>Überr. ${twProz(x.ueberraschung, gz0)}</em><b class="${klasse(x.reaktion)}">${twProz(x.reaktion)}</b></div>`).join('')}</div>` : '';
+      box.innerHTML = `${bild}${liste}<p class="tf-unter">Kurs vom Schluss vor der Reaktion, letzte Zahlen der letzten 100 Tage${d.naechster_termin ? ` · ${esc(ctx.ticker)} meldet am ${datumKurz(d.naechster_termin)}` : ''}</p>`;
+    },
+  },
+});
+
+// ---- Widgets für Marktrichtungen (Sektor, Thema, Gesamtmarkt, Anlageklasse, Faktor) ----
+const twRm = { zeit: 'monat' };
+try { Object.assign(twRm, JSON.parse(localStorage.getItem('twRm') || '{}')); } catch {}
+const TW_RM_ZEIT = [['tag', 'Tag'], ['woche', 'Woche'], ['monat', 'Monat'], ['3m', '3 M.'], ['ytd', 'YTD'], ['jahr', 'Jahr']];
+const twRichtungsfehler = (ctx) => `<p class="tf-unter">${esc(ctx.name)} hat keine einzelnen Mitglieder (Anlageklasse oder Faktor).</p>`;
+
+Object.assign(KACHELN, {
+  'r-mitglieder': {
+    titel: 'Mitglieder', ziel: '#themen', min: [3, 4], std: [4, 6], bezug: ['richtung'], nurBezug: true,
+    passt: (c) => c.art === 'richtung' && !!c.mitglieder?.length && c.gruppe !== 'Faktoren',
+    titelMit: (c) => `Mitglieder: ${c.name}`,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.mitglieder?.length || ctx.gruppe === 'Faktoren') { box.innerHTML = twRichtungsfehler(ctx); return; }
+      const [d, depot] = await Promise.all([tafelApi(`/api/richtung/mitglieder?id=${encodeURIComponent(ctx.id)}`), twDepotTicker()]);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const z = twRm.zeit;
+      const liste = d.werte.filter((x) => x[z] !== undefined).sort((a, b) => b[z] - a[z]);
+      const n = Math.max(4, tafelZeilen(h, 20, 70));
+      const auswahl = liste.length <= n ? liste : [...liste.slice(0, Math.ceil(n / 2)), null, ...liste.slice(-Math.floor(n / 2) + 1)];
+      const max = Math.max(...liste.map((x) => Math.abs(x[z])), 0.5);
+      const schnitt = d.korb.veraenderung?.[z] ?? (liste.reduce((a, x) => a + x[z], 0) / Math.max(1, liste.length));
+      const pos = (v) => 50 + (v / max) * 50;
+      box.innerHTML = `<div class="tw-steuer">${TW_RM_ZEIT.map(([k, t]) => `<button type="button" class="tw-knopf" data-tw-rm="${k}" aria-pressed="${k === z}">${t}</button>`).join('')}</div>
+        <div class="tw-rang">${auswahl.map((x) => x === null ? '<div class="tw-rang-luecke">…</div>' : `<div class="${depot.has(x.ticker) ? 'eigen' : ''}"><span title="${esc(x.name)}">${esc(x.ticker.replace(/\.(DE|PA|AS|MI|L|ST|OL|SW)$/, ''))}</span><span class="tw-div-bahn"><i class="${klasse(x[z])}" style="${x[z] >= 0 ? 'left:50%' : `left:${pos(x[z])}%`};width:${Math.abs(x[z]) / max * 50}%"></i><em style="left:${pos(schnitt)}%"></em></span><b class="${klasse(x[z])}">${twProz(x[z])}</b></div>`).join('')}</div>
+        <p class="tf-unter">Strich: Durchschnitt ${twProz(schnitt)} (gleichgewichtet) · ${d.werte.length} Werte${d.fehlen?.length ? `, ${d.fehlen.length} ohne Kurs` : ''} · Stand ${esc(d.stand ?? '')}</p>`;
+      box.querySelectorAll('[data-tw-rm]').forEach((b) => b.addEventListener('click', () => { twRm.zeit = b.dataset.twRm; try { localStorage.setItem('twRm', JSON.stringify(twRm)); } catch {} this.zeige(box, w, h, ctx); }));
+    },
+  },
+  'r-breite': {
+    titel: 'Marktbreite', ziel: '#rotation', min: [3, 3], std: [4, 3], bezug: ['richtung'], nurBezug: true,
+    passt: (c) => c.art === 'richtung' && !!c.mitglieder?.length && c.gruppe !== 'Faktoren',
+    async zeige(box, w, h, ctx) {
+      if (!ctx.mitglieder?.length || ctx.gruppe === 'Faktoren') { box.innerHTML = twRichtungsfehler(ctx); return; }
+      const d = await tafelApi(`/api/richtung/mitglieder?id=${encodeURIComponent(ctx.id)}`);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const b = d.breite;
+      const zeile = (name, v) => `<div><span>${name}</span>${balken((v ?? 0) / 100, v !== null && v < 40 ? 'minus' : '')}<b>${v === null ? '–' : `${gz0.format(v)} %`}</b></div>`;
+      const fazit = b.ueber200 === null ? '' : b.ueber200 >= 70 && b.ueber50 >= 60 ? 'Breit getragen: die meisten Werte liegen über ihren Durchschnitten.' : b.ueber200 <= 35 ? 'Schwach: die meisten Werte liegen unter ihrer 200-Tage-Linie.' : b.ueber50 < 40 && b.ueber200 >= 50 ? 'Kurzfristig angeschlagen, langfristig noch intakt.' : 'Gemischt: Gewinner und Verlierer halten sich die Waage.';
+      box.innerHTML = `${fazit ? `<p class="tw-fazit">${fazit}</p>` : ''}<div class="tf-liste">${zeile('Über 200-Tage-Linie', b.ueber200)}${zeile('Über 50-Tage-Linie', b.ueber50)}${zeile('Höchstens 5 % unter Jahreshoch', b.nahe_hoch)}${zeile('Im Monat gestiegen', b.im_plus_monat)}</div>
+        <p class="tf-unter">Anteil von ${b.n} Werten${ctx.gruppe === 'Gesamtmarkt' ? ' (die größten)' : ''}</p>`;
+    },
+  },
+  'r-rotation': {
+    titel: 'Sektorrotation', ziel: '#rotation', min: [3, 3], std: [4, 3], bezug: ['richtung'], nurBezug: true,
+    passt: (c) => c.gruppe === 'Sektoren',
+    async zeige(box, w, h, ctx) {
+      if (ctx.gruppe !== 'Sektoren') { box.innerHTML = '<p class="tf-unter">Die Rotation gibt es für die elf S&amp;P-Sektoren.</p>'; return; }
+      const d = await tafelApi('/api/rotation');
+      const s = (d.sektoren?.werte ?? []).find((x) => x.ticker === ctx.ticker);
+      const wo = s?.woche;
+      if (!wo?.spur?.length) { box.innerHTML = '<p class="tf-unter">Keine Rotationsdaten.</p>'; return; }
+      const q = ROT_Q[wo.quadrant];
+      const B = 160, H = 110, spur = wo.spur;
+      const xs = spur.map((p) => p.ratio), ys = spur.map((p) => p.momentum);
+      const r = Math.max(2, ...xs.map((v) => Math.abs(v - 100)), ...ys.map((v) => Math.abs(v - 100))) * 1.15;
+      const x = (v) => B / 2 + ((v - 100) / r) * (B / 2), y = (v) => H / 2 - ((v - 100) / r) * (H / 2);
+      const pfad = spur.map((p, i) => `${i ? 'L' : 'M'}${x(p.ratio).toFixed(1)},${y(p.momentum).toFixed(1)}`).join('');
+      const ende = spur.at(-1);
+      box.innerHTML = `<div class="tw-rrg"><svg viewBox="0 0 ${B} ${H}" width="${B}" height="${H}" aria-label="Spur im Rotationsdiagramm">
+          <rect class="q-fuehrend" x="${B / 2}" y="0" width="${B / 2}" height="${H / 2}"/><rect class="q-erholend" x="0" y="0" width="${B / 2}" height="${H / 2}"/>
+          <rect class="q-nachzuegler" x="0" y="${H / 2}" width="${B / 2}" height="${H / 2}"/><rect class="q-abschwaechend" x="${B / 2}" y="${H / 2}" width="${B / 2}" height="${H / 2}"/>
+          <path d="${pfad}"/><circle cx="${x(ende.ratio)}" cy="${y(ende.momentum)}" r="4"/></svg>
+        <div><p class="tf-zahl tw-klein">${esc(q?.name ?? wo.quadrant)}</p><p class="tf-unter">${esc(q?.text ?? '')}</p><p class="tf-unter">seit ${wo.seit} Wochen${wo.vorher ? `, vorher ${esc(ROT_Q[wo.vorher]?.name ?? wo.vorher)}` : ''}</p></div></div>
+        <p class="tf-unter">Wochenspur gegen den S&amp;P 500, rechts = stärker, oben = Stärke nimmt zu</p>`;
+    },
+  },
+  'r-bewertung': {
+    titel: 'Kurs gegen Gewinn', ziel: '#fundament', min: [3, 3], std: [4, 4], bezug: ['richtung', 'wert'], nurBezug: true,
+    passt: (c) => !!c.fund_id || (c.art === 'wert' && c.typ === 'aktie'),
+    async zeige(box, w, h, ctx) {
+      const id = ctx.fund_id ?? (ctx.art === 'wert' && ctx.typ === 'aktie' ? ctx.ticker : null);
+      if (!id) { box.innerHTML = `<p class="tf-unter">Für ${esc(ctx.name)} gibt es keine Gewinnzahlen (nur Sektoren, Themen, S&amp;P 500 und Aktien).</p>`; return; }
+      const d = await tafelApi(`/api/fund/gegen?wert=${encodeURIComponent(id)}&kennzahl=nettogewinn&art=ttm&jahre=5`);
+      if (d.fehler) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler)}</p>`; return; }
+      const abstand = d.cagr_kurs !== null && d.cagr_kennzahl !== null ? d.cagr_kurs - d.cagr_kennzahl : null;
+      const fazit = abstand === null ? '' : abstand > 8 ? 'Der Kurs ist deutlich schneller gestiegen als der Gewinn: die Bewertung ist gestiegen.' : abstand < -8 ? 'Der Gewinn ist schneller gewachsen als der Kurs: die Bewertung ist gesunken.' : 'Kurs und Gewinn sind etwa im Gleichschritt gewachsen.';
+      const breite = Math.max(240, box.clientWidth), hoehe = Math.max(90, h * TAFEL_ZEILE + (h - 1) * TAFEL_ABSTAND - 76 - 160);
+      const norm = (r) => { const s = r.werte.find((v) => v); return r.werte.map((v) => (v && s ? (v / s) * 100 : null)); };
+      const kurs = d.kurs, kz = d.kennzahl_reihe;
+      let bild = '';
+      if (kurs?.werte?.length && kz?.werte?.length) {
+        // Kennzahl als Stufen auf die Monatsachse des Kurses legen
+        const stufen = kurs.daten.map((t) => { let v = null; kz.daten.forEach((q, i) => { if (q <= t) v = kz.werte[i]; }); return v; });
+        bild = twLinienBild(breite, hoehe, kurs.daten, [{ name: 'Kurs', werte: norm(kurs), klasse: 'basis', rang: 2 }, { name: 'Gewinn', werte: norm({ werte: stufen }), klasse: 'eigen', rang: 1 }], { nullwert: 100, format: (v) => gz0.format(v), achse: [[0, kurs.daten[0].slice(0, 4)], [kurs.daten.length - 1, kurs.daten.at(-1).slice(0, 4)]] });
+      }
+      box.innerHTML = `${fazit ? `<p class="tw-fazit">${fazit}</p>` : ''}${bild}
+        <p class="tw-reihe"><span>Kurs <b>${twProz(d.cagr_kurs)}</b>/J.</span><span>Gewinn <b>${twProz(d.cagr_kennzahl)}</b>/J.</span><span>Gleichlauf <b>${twZahl(d.korrelation, gz2)}</b></span></p>
+        <p class="tf-unter"><span class="tw-l-leg basis">Kurs</span> <span class="tw-l-leg eigen">Gewinn (12 Monate)</span> · 5 Jahre, Start = 100${d.korb ? ' · Korb gleichgewichtet' : ''}</p>`;
+    },
+  },
+  'r-cot': {
+    titel: 'Positionierung (COT)', ziel: '#positionierung', min: [3, 3], std: [4, 3], bezug: ['richtung', 'wert'], nurBezug: true,
+    passt: (c) => !!c.cot,
+    async zeige(box, w, h, ctx) {
+      if (!ctx.cot) { box.innerHTML = `<p class="tf-unter">Für ${esc(ctx.name)} gibt es keinen passenden Futures-Markt im COT-Bericht.</p>`; return; }
+      const d = await tafelApi('/api/gg/cot');
+      const m = (d.maerkte ?? []).find((x) => x.id === ctx.cot);
+      if (!m) { box.innerHTML = '<p class="tf-unter">Keine COT-Daten.</p>'; return; }
+      box.innerHTML = `<div class="tf-liste">${m.gruppen.map((g) => `<div><span>${esc(g.name)}</span>${balken((g.index ?? 0) / 100, g.index >= 80 ? '' : g.index <= 20 ? 'minus' : '')}<b>${twZahl(g.index, gz0)}</b></div>`).join('')}</div>
+        <p class="tf-unter">COT-Index: Netto-Position gegen die letzten 3 Jahre (0 = so short wie nie, 100 = so long wie nie) · ${esc(m.name)}, CFTC, Stand ${esc(d.stand ?? '')}</p>`;
+    },
+  },
+  'r-verhaeltnis': {
+    titel: 'Faktor im Verhältnis', ziel: '#stil', min: [3, 3], std: [6, 4], bezug: ['richtung'], nurBezug: true,
+    passt: (c) => c.gruppe === 'Faktoren',
+    titelMit: (c) => c.name,
+    async zeige(box, w, h, ctx) {
+      if (ctx.gruppe !== 'Faktoren') { box.innerHTML = '<p class="tf-unter">Passt zu den Faktor-Richtungen (z. B. Growth gegen Value).</p>'; return; }
+      const [a, b] = await Promise.all([ctx.ticker, ctx.gegen].map((t) => tafelApi(`/api/chart/kerzen?ticker=${encodeURIComponent(t)}&intervall=1d`)));
+      const bk = new Map(b.t.map((t, i) => [t, b.c[i]]));
+      const daten = [], werte = [];
+      a.t.forEach((t, i) => { if (bk.has(t)) { daten.push(t); werte.push(a.c[i] / bk.get(t)); } });
+      const n = Math.min(werte.length, 504);
+      const d = daten.slice(-n), v = werte.slice(-n).map((x, i, arr) => (x / arr[0]) * 100);
+      const sma = v.map((_, i) => (i >= 199 ? v.slice(i - 199, i + 1).reduce((s, x) => s + x, 0) / 200 : null));
+      const vor = (k) => (v.length > k ? (v.at(-1) / v.at(-1 - k) - 1) * 100 : null);
+      const ueber = sma.at(-1) !== null && v.at(-1) > sma.at(-1);
+      const breite = Math.max(240, box.clientWidth), hoehe = Math.max(90, h * TAFEL_ZEILE + (h - 1) * TAFEL_ABSTAND - 76 - 70);
+      box.innerHTML = `<p class="tw-fazit">${esc(ctx.ticker)} liegt gegen ${esc(ctx.gegen)} ${ueber ? 'über' : 'unter'} dem 200-Tage-Schnitt des Verhältnisses: ${ueber ? `${esc(ctx.ticker)} führt` : `${esc(ctx.gegen)} führt`}.</p>
+        ${twLinienBild(breite, hoehe, d, [{ name: 'Verhältnis', werte: v, klasse: 'basis', rang: 2 }, { name: '200 T.', werte: sma, klasse: 'mittel', rang: 1 }], { nullwert: 100, format: (x) => gz0.format(x), achse: [[0, datumKurz(d[0])], [d.length - 1, datumKurz(d.at(-1))]] })}
+        <p class="tw-reihe"><span>Monat <b class="${klasse(vor(21))}">${twProz(vor(21))}</b></span><span>3 M. <b class="${klasse(vor(63))}">${twProz(vor(63))}</b></span><span>Jahr <b class="${klasse(vor(252))}">${twProz(vor(252))}</b></span></p>`;
+    },
+  },
+});
+
+// ---- Weitere Widgets für die Arbeitsplätze (Depot, Earnings-Saison, Volatilität) ----
+const twEuro = (v) => (v === null || v === undefined ? '–' : `${ggVz(v, gz0)} €`);
+function twDivergent(zeilen, einheit = ' %', format = gz1) {
+  const max = Math.max(...zeilen.map(([, v]) => Math.abs(v ?? 0)), 0.01);
+  return `<div class="tw-divergent">${zeilen.map(([n, v, titel]) => `<div${titel ? ` title="${esc(titel)}"` : ''}><span>${esc(n)}</span><span class="tw-div-bahn"><i class="${klasse(v)}" style="${v >= 0 ? 'left:50%' : `left:${50 - (Math.abs(v) / max) * 50}%`};width:${(Math.abs(v) / max) * 50}%"></i></span><b class="${klasse(v)}">${ggVz(v, format)}${einheit}</b></div>`).join('')}</div>`;
+}
+
+Object.assign(KACHELN, {
+  'd-risiko': {
+    titel: 'Depot-Risiko', ziel: '#risiko', min: [3, 3], std: [4, 3],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/risiko');
+      const r = d.depot;
+      if (!r) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler ?? 'Keine Daten.')}</p>`; return; }
+      box.innerHTML = `<p class="tf-zahl">${gz0.format(r.var_eur)} €</p><p class="tf-unter">An einem von 20 Tagen verliert das Depot mehr (VaR 95 %, ${gz1.format(r.var_prozent)} %)</p>
+        <div class="tf-liste"><div><span>Schwankung pro Jahr</span><b>${gz0.format(r.vol)} %</b></div><div><span>Beta zum Weltmarkt</span><b>${gz2.format(r.beta)}</b></div>
+        <div><span>Rückgang vom Hoch</span><b class="${klasse(r.dd_jetzt)}">${twProz(r.dd_jetzt)}</b></div><div><span>Größter Rückgang (1 J.)</span><b class="minus">${twProz(r.max_dd)}</b></div></div>`;
+    },
+  },
+  'd-korrelation': {
+    titel: 'Bewegt sich alles gleich?', ziel: '#risiko', min: [3, 3], std: [4, 3],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/risiko');
+      const k = d.korr_rollend;
+      if (!k) { box.innerHTML = '<p class="tf-unter">Noch zu wenig Kursverlauf.</p>'; return; }
+      const spur = (k.kurz ?? []).filter((v) => v !== null).slice(-250);
+      box.innerHTML = `<p class="tf-zahl ${k.warnung ? 'minus' : ''}">${gz2.format(k.jetzt)}</p><p class="tf-unter">Durchschnittliche Korrelation deiner Werte (${k.fenster?.[0] ?? 60} Tage) · vor 20 Tagen ${gz2.format(k.vor20)} · üblich ${gz2.format(k.median)}</p>
+        <div class="tf-liste"><div><span>Perzentil (2 Jahre)</span>${balken((k.perzentil ?? 0) / 100, k.perzentil > 80 ? 'minus' : '')}<b>${gz0.format(k.perzentil)}</b></div></div>
+        ${h >= 3 ? `<div class="tf-mini">${mfMini(spur)}</div>` : ''}${k.warnung ? '<p class="tw-fazit">Deine Werte laufen gerade ungewöhnlich gleich: Streuung hilft weniger als sonst.</p>' : ''}`;
+    },
+  },
+  'd-stresstest': {
+    titel: 'Stresstest', ziel: '#stresstest', min: [3, 3], std: [4, 3],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/stresstest');
+      const s = d.szenarien ?? [];
+      if (!s.length) { box.innerHTML = '<p class="tf-unter">Keine Szenarien.</p>'; return; }
+      const max = Math.max(...s.flatMap((x) => [Math.abs(x.depot_prozent ?? 0), Math.abs(x.markt_prozent ?? 0)]), 1);
+      box.innerHTML = `<div class="tw-stress">${s.slice(0, tafelZeilen(h, 34, 24)).map((x) => `<div><span>${esc(x.name)}</span><b class="minus">${twEuro(x.depot_eur)}</b>
+          <span class="tw-zwei"><i class="jetzt neg" style="width:${(Math.abs(x.depot_prozent) / max) * 100}%"></i><i class="frueher" style="width:${(Math.abs(x.markt_prozent ?? 0) / max) * 100}%"></i></span>
+          <small>Depot ${twProz(x.depot_prozent)} · Weltmarkt ${twProz(x.markt_prozent)}</small></div>`).join('')}</div>`;
+    },
+  },
+  'd-sensitiv': {
+    titel: 'Zins, Öl, Dollar', ziel: '#makro', min: [3, 2], std: [4, 3],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/makro-sensitivitaet');
+      if (!d.depot) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler ?? 'Keine Daten.')}</p>`; return; }
+      const zeilen = (d.faktoren ?? []).map((f) => [f.frage, d.depot[f.schluessel]?.prozent, `${f.schock_text}: ${twEuro(d.depot[f.schluessel]?.eur)}${d.depot[f.schluessel]?.sicher ? '' : ' (nicht sicher)'}`]);
+      box.innerHTML = `${twDivergent(zeilen)}<p class="tf-unter">So bewegte sich dein Depot im Schnitt je Woche, wenn ${esc(d.faktoren?.[0]?.schock_text ?? '')} usw. (Regression, ${d.zeitraum?.wochen ?? ''} Wochen). Blass = statistisch nicht sicher.</p>`;
+      box.querySelectorAll('.tw-divergent > div').forEach((z, i) => { if (!d.depot[d.faktoren[i].schluessel]?.sicher) z.classList.add('tw-blass'); });
+    },
+  },
+  'd-faktoren': {
+    titel: 'Versteckte Wetten (Faktoren)', ziel: '#faktoren', min: [3, 3], std: [4, 3],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/faktoren');
+      const b = d.depot?.beta;
+      if (!b) { box.innerHTML = `<p class="tf-unter">${esc(d.fehler ?? 'Keine Daten.')}</p>`; return; }
+      const zeilen = (d.faktoren ?? []).map((f) => [f.name, b[f.schluessel]?.wert, b[f.schluessel]?.wert >= 0 ? f.plus : f.minus]);
+      box.innerHTML = `<p class="tw-reihe"><span>Markt-Beta <b>${gz2.format(b.markt.wert)}</b></span><span>R² <b>${gz2.format(d.depot.r2)}</b></span></p>${twDivergent(zeilen, '', gz2)}
+        <p class="tf-unter">Wochenrenditen gegen Weltmarkt und Faktor-ETFs, ${d.jahre} Jahre. Blass = nicht sicher.</p>`;
+      box.querySelectorAll('.tw-divergent > div').forEach((z, i) => { if (!b[d.faktoren[i].schluessel]?.sicher) z.classList.add('tw-blass'); });
+    },
+  },
+  'd-unruhig': {
+    titel: 'Unruhige Positionen', ziel: '#vola', min: [3, 3], std: [4, 3],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/schwankung/depot');
+      const p = [...(d.positionen ?? [])].filter((x) => x.verhaeltnis).sort((a, b) => b.verhaeltnis - a.verhaeltnis);
+      if (!p.length) { box.innerHTML = '<p class="tf-unter">Keine Daten.</p>'; return; }
+      const max = Math.max(...p.map((x) => x.verhaeltnis), 2);
+      box.innerHTML = `<div class="tf-liste">${p.slice(0, tafelZeilen(h, 26, 24)).map((x) => `<div><span>${esc(x.name)}</span>${balken(x.verhaeltnis / max, x.stufe === 'unruhig' ? 'minus' : '')}<b class="${x.stufe === 'unruhig' ? 'minus' : x.stufe === 'ruhig' ? 'plus' : ''}">${gz1.format(x.verhaeltnis)}×</b></div>`).join('')}</div>
+        <p class="tf-unter">Schwankung der letzten 20 Tage gegen den eigenen Median des Jahres (unruhig ab 1,5×)</p>`;
+    },
+  },
+  'd-wasserfall': {
+    titel: 'Wer hat das Depot bewegt?', ziel: '#analysecharts', min: [3, 3], std: [4, 4],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/analysecharts?zeitraum=1m');
+      const p = [...(d.positionen ?? [])].filter((x) => x.beitrag !== null && x.beitrag !== undefined).sort((a, b) => Math.abs(b.beitrag) - Math.abs(a.beitrag));
+      if (!p.length) { box.innerHTML = '<p class="tf-unter">Keine Daten.</p>'; return; }
+      const n = tafelZeilen(h, 22, 44);
+      const zeilen = p.slice(0, n).sort((a, b) => b.beitrag - a.beitrag).map((x) => [x.name, x.beitrag, `${x.name}: ${twProz(x.rendite)}`]);
+      box.innerHTML = `<p class="tw-reihe"><span>Summe letzter Monat <b class="${klasse(d.summe_beitrag)}">${twEuro(d.summe_beitrag)}</b></span></p>${twDivergent(zeilen, ' €', gz0)}<p class="tf-unter">Heutige Stückzahl × Kursveränderung seit ${datumKurz(d.ab)}, in Euro</p>`;
+    },
+  },
+  'd-relativ': {
+    titel: 'Positionen gegen ihre Branche', ziel: '#relativ', min: [3, 3], std: [4, 4],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/relativ');
+      const a = (d.aktien ?? []).filter((x) => x.zeitraeume?.monat?.relativ !== undefined).sort((x, y) => y.zeitraeume.monat.relativ - x.zeitraeume.monat.relativ);
+      if (!a.length) { box.innerHTML = '<p class="tf-unter">Keine Daten.</p>'; return; }
+      const n = tafelZeilen(h, 22, 24);
+      const auswahl = a.length <= n ? a : [...a.slice(0, Math.ceil(n / 2)), ...a.slice(-Math.floor(n / 2))];
+      box.innerHTML = `${twDivergent(auswahl.map((x) => [x.name, x.zeitraeume.monat.relativ, `gegen ${x.etf}`]), ' Pp.')}<p class="tf-unter">Vorsprung im letzten Monat gegen den Branchen-ETF, in Euro</p>`;
+    },
+  },
+  'es-moves': {
+    titel: 'Meine nächsten Zahlen', ziel: '#earnings-moves', min: [3, 3], std: [4, 4],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/earnings-moves');
+      const heute = new Date(heuteIso());
+      const t = (d.werte ?? []).filter((x) => x.naechster?.datum && !x.extra).map((x) => ({ ...x, tage: Math.round((new Date(x.naechster.datum) - heute) / 864e5) })).filter((x) => x.tage >= 0).sort((a, b) => a.tage - b.tage);
+      if (!t.length) { box.innerHTML = '<p class="tf-unter">Keine Termine bekannt.</p>'; return; }
+      box.innerHTML = `<div class="tf-liste">${t.slice(0, tafelZeilen(h, 26, 24)).map((x) => {
+        const erw = x.erwartet?.prozent;
+        const typ = erw ?? x.schnitt_betrag;
+        return `<div><span>${datumKurz(x.naechster.datum)} ${esc(x.name)}</span><em>${erw ? `±${gz1.format(erw)} % eingepreist` : `üblich ±${gz1.format(x.schnitt_betrag ?? 0)} %`}</em><b>${x.wert && typ ? `±${gz0.format((x.wert * typ) / 100)} €` : ''}</b></div>`;
+      }).join('')}</div><p class="tf-unter">Eingepreist laut Optionen ab ${d.optionen_ab_tage} Tagen vorher, sonst Ø der letzten Reaktionen · in Euro für deine Position</p>`;
+    },
+  },
+  'es-barometer': {
+    titel: 'Earnings-Saison', ziel: '#earnings-moves', min: [3, 3], std: [4, 3],
+    async zeige(box, w, h) {
+      const d = await tafelApi('/api/earnings-barometer');
+      const s = d.saisons?.[0], v = d.saisons?.[1];
+      if (!s) { box.innerHTML = '<p class="tf-unter">Keine Daten.</p>'; return; }
+      box.innerHTML = `<p class="tf-zahl">${gz0.format(s.anteil_schlagen)} %</p><p class="tf-unter">${esc(s.name)}: übertreffen die Erwartung (${s.n} Meldungen${v ? `, Vorsaison ${gz0.format(v.anteil_schlagen)} %` : ''})</p>
+        <div class="tf-liste"><div><span>Reaktion nach Übertreffen</span><b class="${klasse(s.schlagen?.median)}">${twProz(s.schlagen?.median)}</b></div><div><span>Reaktion nach Verfehlen</span><b class="${klasse(s.verfehlen?.median)}">${twProz(s.verfehlen?.median)}</b></div>
+        <div><span>Ø Ausschlag</span><b>±${gz1.format(s.ausschlag)} %</b></div></div>
+        <p class="tf-unter">Median gegen alle S&amp;P-500-Werte, Tag vor bis Tag nach den Zahlen</p>`;
+    },
+  },
+  'vo-struktur': {
+    titel: 'VIX-Laufzeitstruktur', ziel: '#vola', min: [3, 2], std: [4, 3],
+    async zeige(box, w, h) {
+      const t = ['^VIX9D', '^VIX', '^VIX3M', '^VVIX'];
+      const k = await Promise.all(t.map((x) => tafelApi(`/api/chart/kerzen?ticker=${encodeURIComponent(x)}&intervall=1d`).catch(() => ({}))));
+      const v = k.map((x) => x.c?.at(-1) ?? null);
+      if (v[1] === null) { box.innerHTML = '<p class="tf-unter">Keine VIX-Daten.</p>'; return; }
+      const verh = v[2] ? v[1] / v[2] : null;
+      const lage = verh === null ? '' : verh > 1 ? ['Backwardation: kurzfristig mehr Angst als langfristig, typisch für Stress.', 'minus'] : verh > 0.92 ? ['Flach: der Markt ist angespannt.', ''] : ['Contango: normale, ruhige Lage.', 'plus'];
+      const max = Math.max(...v.slice(0, 3).filter(Boolean));
+      box.innerHTML = `${lage ? `<p class="tw-fazit ${lage[1]}">${lage[0]}</p>` : ''}<div class="tw-vix">${['9 Tage', '30 Tage', '3 Monate'].map((n, i) => v[i] ? `<div><i style="height:${(v[i] / max) * 100}%"></i><b>${gz1.format(v[i])}</b><span>${n}</span></div>` : '').join('')}</div>
+        <p class="tw-reihe"><span>VIX ÷ VIX3M <b>${verh ? gz2.format(verh) : '–'}</b></span><span>VVIX <b>${v[3] ? gz0.format(v[3]) : '–'}</b></span></p>`;
+    },
+  },
+});
 function tafelLayout() { return tafelDaten.layouts.find((l) => l.name === tafelDaten.aktiv) ?? tafelDaten.layouts[0]; }
+
+// ---- Arbeitsplätze: Layouts mit Bezug (siehe ARBEITSPLAETZE.md) ----
+// Ein Layout kann an einen Wert (jeder Yahoo-Ticker) oder eine Marktrichtung (Gesamtmarkt, Sektor, Thema,
+// Anlageklasse, Faktor) gebunden sein. Oben steht dann ein Auswahlfeld; Widgets mit "bezug" bekommen den
+// aufgelösten Bezug von /api/bezug als viertes Argument und folgen ihm. Widgets ohne Bezug bleiben, wie sie sind.
+// bezug: ['wert', 'richtung'] = womit das Widget umgehen kann; nurBezug: nur in Layouts mit Bezug im Vorrat.
+const tfBezugCache = {}, tfBezugFertig = {};
+function tfBezugBereit() {
+  const b = tafelLayout()?.bezug;
+  if (!b) return Promise.resolve(null);
+  if (!tfBezugCache[b.id]) {
+    tfBezugCache[b.id] = api(`/api/bezug?id=${encodeURIComponent(b.id)}`).catch(() => ({ fehler: 'Der Bezug konnte nicht geladen werden.' }))
+      .then((ctx) => { tfBezugFertig[b.id] = ctx; return ctx; });
+  }
+  return tfBezugCache[b.id];
+}
+// Widgets, die zum gewählten Bezug nicht passen (z. B. COT bei einem Sektor), sind außerhalb des Bearbeitens
+// ausgeblendet; die anderen rücken nach (nur in der Anzeige, gespeichert bleibt die Anordnung).
+function tfSichtbar(k, ctx) {
+  const p = KACHELN[k.art]?.passt;
+  return !(p && ctx && !ctx.fehler && !p(ctx));
+}
+function tfAnzeigeListe(lay) {
+  const ctx = lay.bezug ? tfBezugFertig[lay.bezug.id] : null;
+  if (tafelBearbeiten || !ctx) return lay.kacheln;
+  const sichtbar = lay.kacheln.filter((k) => tfSichtbar(k, ctx));
+  if (sichtbar.length === lay.kacheln.length) return lay.kacheln;
+  const kopie = sichtbar.map((k) => ({ ...k }));
+  tafelGlaetten(kopie);
+  return kopie;
+}
+const tfPasst = (art) => !KACHELN[art].nurBezug || !!tafelLayout()?.bezug;
+const tfTitel = (art, ctx) => (ctx && !ctx.fehler && KACHELN[art].titelMit ? KACHELN[art].titelMit(ctx) : KACHELN[art].titel);
+// Hinweis im Widget, wenn es mit dieser Art von Bezug nichts anfangen kann
+function tfBezugPasst(art, ctx) {
+  const k = KACHELN[art];
+  if (!k.bezug || k.bezugOptional) return true;
+  if (!ctx) return !k.nurBezug;
+  if (ctx.fehler) return false;
+  return k.bezug.includes(ctx.art);
+}
+// Antippen öffnet die volle Ansicht; mit Bezug vorher den Wert dort einstellen (z. B. Chartanalyse)
+async function tfOeffnen(art) {
+  const k = KACHELN[art];
+  const ctx = k.bezug ? await tfBezugBereit() : null;
+  if (ctx && !ctx.fehler && k.vorOeffnen) k.vorOeffnen(ctx);
+  location.hash = (ctx && !ctx.fehler && k.zielMit?.(ctx)) || k.ziel;
+}
+const TF_BEZUG_ARTEN = { aktie: 'Aktie oder ETF', index: 'Index', future: 'Future', devise: 'Währung', krypto: 'Krypto' };
+
+function tfBezugZeichnen() {
+  const leiste = el('tf-bezug');
+  const lay = tafelLayout();
+  leiste.hidden = !lay?.bezug;
+  if (!lay?.bezug) { leiste.innerHTML = ''; return; }
+  leiste.innerHTML = `<div class="fu-picker" id="tf-picker"></div><p class="tf-bezug-info sekundaer" id="tf-bezug-info"></p>`;
+  tfPicker(el('tf-picker'), lay.bezug, (wahl) => {
+    lay.bezug = { art: wahl.art, id: wahl.id, name: wahl.name };
+    tafelSpeichern();
+    zeichneTafel();
+  });
+  tfBezugBereit().then((ctx) => {
+    const info = el('tf-bezug-info');
+    if (!info || tafelLayout()?.bezug?.id !== lay.bezug.id) return;
+    if (!ctx || ctx.fehler) { info.textContent = ctx?.fehler ?? ''; return; }
+    const teile = [];
+    if (ctx.art === 'wert') {
+      teile.push(TF_BEZUG_ARTEN[ctx.typ] ?? ctx.typ);
+      if (ctx.optionen) teile.push(ctx.optionen_vertreten ? `Optionen und Gamma über ${ctx.optionen}` : 'mit US-Optionen');
+      else teile.push('ohne US-Optionen');
+      if (ctx.position) teile.push(`im Depot: ${kurzEuro.format(ctx.position.wert_eur ?? 0).replace('+', '')}`);
+      if (ctx.thesen?.length) teile.push(`These: ${ctx.thesen.join(', ')}`);
+    } else {
+      teile.push(ctx.gruppe);
+      if (ctx.ticker) teile.push(`Leitwert ${ctx.ticker}${ctx.gegen ? ` gegen ${ctx.gegen}` : ''}`);
+      if (ctx.korb) teile.push('gleichgewichteter Korb');
+      if (ctx.mitglieder?.length && ctx.gruppe !== 'Faktoren') teile.push(`${ctx.mitglieder.length} Werte`);
+      if (ctx.eigene?.length) teile.push(`davon im Depot: ${ctx.eigene.join(', ')}`);
+    }
+    info.textContent = teile.join(' · ');
+  });
+}
+
+// Auswahlfeld für Wert oder Marktrichtung: Liste mit Positionen, Marktrichtungen und der Yahoo-Suche ab zwei Buchstaben.
+let tfRichtungen = null;
+function tfPicker(feld, jetzt, beiWahl) {
+  feld.innerHTML = `<div class="fu-p-feld"><input id="tf-p-input" class="pv-select" value="${esc(jetzt?.name ?? '')}" placeholder="Wert oder Marktrichtung suchen" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="tf-p-liste" aria-label="Wert oder Marktrichtung wählen"><span class="fu-p-pfeil" aria-hidden="true">▾</span><ul id="tf-p-liste" class="fu-p-liste" role="listbox" hidden></ul></div>`;
+  const inp = el('tf-p-input'), liste = el('tf-p-liste');
+  let treffer = [], uhr = null, markiert = -1, aktuell = [], depot = [];
+  api('/api/portfolio').then((d) => { depot = (d.positionen ?? []).filter((p) => p.ticker).map((p) => ({ art: 'wert', id: p.ticker, name: p.name ?? p.ticker, gruppe: 'Deine Positionen', zusatz: p.ticker })); }).catch(() => {});
+  if (!tfRichtungen) api('/api/bezug/richtungen').then((d) => { tfRichtungen = (d.richtungen ?? []).map((r) => ({ ...r, art: 'richtung' })); }).catch(() => {});
+  const optionen = () => {
+    const q = inp.value.trim().toLowerCase();
+    const basis = [...depot, ...(tfRichtungen ?? [])];
+    const passend = q ? basis.filter((o) => `${o.name} ${o.id} ${o.zusatz ?? ''} ${o.gruppe}`.toLowerCase().includes(q)) : basis;
+    const gesehen = new Set(passend.map((o) => o.id));
+    return [...passend, ...treffer.filter((t) => !gesehen.has(t.ticker)).map((t) => ({ art: 'wert', id: t.ticker, name: t.name || t.ticker, gruppe: 'Suche (Yahoo)', zusatz: `${t.ticker} · ${t.boerse ?? ''}` }))];
+  };
+  const zeigen = () => {
+    aktuell = optionen();
+    markiert = Math.min(markiert, aktuell.length - 1);
+    let gruppe = '';
+    liste.innerHTML = aktuell.length ? aktuell.map((o, i) => {
+      const kopf = o.gruppe !== gruppe ? `<li class="fu-p-kopf" role="presentation">${esc(o.gruppe)}</li>` : '';
+      gruppe = o.gruppe;
+      return `${kopf}<li role="option" id="tf-p-o${i}" data-i="${i}" class="${i === markiert ? 'an' : ''}" aria-selected="${i === markiert}"><span>${esc(o.name)}</span>${o.zusatz ? `<small>${esc(o.zusatz)}</small>` : ''}</li>`;
+    }).join('') : `<li class="fu-p-leer">${inp.value.trim().length >= 2 ? 'Suche läuft …' : 'Name oder Ticker eingeben'}</li>`;
+    liste.hidden = false; inp.setAttribute('aria-expanded', 'true');
+    if (markiert >= 0) { inp.setAttribute('aria-activedescendant', `tf-p-o${markiert}`); el(`tf-p-o${markiert}`)?.scrollIntoView({ block: 'nearest' }); }
+  };
+  const zu = () => { liste.hidden = true; inp.setAttribute('aria-expanded', 'false'); };
+  const waehle = (o) => { zu(); if (o) { inp.value = o.name; beiWahl(o); } };
+  const oeffnen = () => { if (!liste.hidden) return; inp.placeholder = jetzt?.name || inp.placeholder; inp.value = ''; markiert = -1; treffer = []; zeigen(); };
+  inp.addEventListener('focus', oeffnen);
+  inp.addEventListener('pointerdown', () => { if (document.activeElement === inp) oeffnen(); });
+  inp.addEventListener('input', () => {
+    markiert = 0; treffer = []; zeigen();
+    clearTimeout(uhr);
+    const q = inp.value.trim();
+    if (q.length >= 2) uhr = setTimeout(async () => { const r = await api(`/api/watchlist/suche?q=${encodeURIComponent(q)}`).catch(() => ({})); if (inp.value.trim() === q) { treffer = (r.treffer ?? []).filter((t) => t.art !== 'Option').slice(0, 8); zeigen(); } }, 300);
+  });
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); markiert = Math.min(aktuell.length - 1, markiert + 1); zeigen(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); markiert = Math.max(0, markiert - 1); zeigen(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const q = inp.value.trim();
+      if (markiert >= 0 && aktuell[markiert]) waehle(aktuell[markiert]);
+      else if (/^[A-Za-z0-9.\-^=]{1,15}$/.test(q)) waehle({ art: 'wert', id: q.toUpperCase(), name: q.toUpperCase() });
+    } else if (e.key === 'Escape') { zu(); inp.blur(); }
+  });
+  liste.addEventListener('pointerdown', (e) => { const li = e.target.closest('li[data-i]'); if (!li) return; e.preventDefault(); waehle(aktuell[+li.dataset.i]); });
+  inp.addEventListener('blur', () => setTimeout(() => { zu(); if (!inp.value.trim()) inp.value = jetzt?.name ?? ''; }, 120));
+}
+
+// Vorlagen: fertige Arbeitsplätze, die als neues Layout angelegt und danach frei umgebaut werden können.
+// Widgets, die es (noch) nicht gibt, werden beim Anlegen übergangen.
+const TAFEL_VORLAGEN = {
+  e: {
+    name: 'Ausblick Einzelwert', text: 'Ein Wert im Blick: Lage, erwartete Bewegung, Kursspanne laut Optionen, Schwankung, Gamma, News, Zahlen, ähnliche Werte', bezug: { art: 'wert', id: 'NVDA', name: 'NVIDIA' },
+    kacheln: [['w-kopf', 8, 2], ['w-position', 4, 4], ['w-erwartet', 4, 4], ['w-spanne', 4, 4], ['w-chart', 4, 3], ['w-vola', 4, 3], ['gamma', 4, 2], ['w-optionen', 4, 3],
+      ['w-aehnlich', 8, 5], ['w-news', 4, 5], ['w-aehnlich-zahlen', 6, 4], ['w-zahlen', 3, 4], ['w-relativ', 3, 4], ['w-fund', 4, 3], ['w-rsi', 4, 3], ['w-volumen', 4, 3], ['w-insider', 4, 3]],
+    handy: [['w-kopf', 2], ['w-erwartet', 3], ['w-position', 4], ['w-spanne', 3], ['w-chart', 3], ['w-aehnlich', 5], ['w-news', 4], ['w-aehnlich-zahlen', 4], ['w-zahlen', 3], ['w-vola', 3], ['gamma', 2], ['w-optionen', 3], ['w-relativ', 3], ['w-fund', 3], ['w-rsi', 3], ['w-volumen', 3], ['w-insider', 3]],
+  },
+  r: {
+    name: 'Ausblick Marktrichtung', text: 'Gesamtmarkt, Sektor, Thema, Anlageklasse oder Faktor: Mitglieder, Breite, Rotation, Bewertung, Positionierung, Optionen', bezug: { art: 'richtung', id: 'sektor:XLK', name: 'Technologie' },
+    kacheln: [['w-kopf', 8, 2], ['r-breite', 4, 4], ['r-mitglieder', 4, 6], ['w-erwartet', 4, 4], ['w-spanne', 4, 4], ['r-rotation', 4, 3], ['r-bewertung', 4, 4],
+      ['w-aehnlich', 8, 5], ['r-verhaeltnis', 6, 4], ['r-cot', 4, 3], ['w-chart', 4, 3], ['w-vola', 4, 3], ['gamma', 4, 2], ['w-news', 6, 5], ['sektoren', 4, 4], ['themen', 4, 4], ['bewegung', 12, 3]],
+    handy: [['w-kopf', 2], ['r-breite', 4], ['r-mitglieder', 6], ['w-erwartet', 4], ['r-rotation', 3], ['r-bewertung', 4], ['r-verhaeltnis', 4], ['w-aehnlich', 5], ['w-spanne', 4], ['r-cot', 3], ['w-news', 5], ['w-chart', 3], ['w-vola', 3], ['gamma', 2], ['sektoren', 4], ['themen', 4]],
+  },
+};
+Object.assign(TAFEL_VORLAGEN, {
+  dh: { name: 'Depot heute', text: 'Was macht mein Depot heute und warum: Bewegung, größte Treiber, Sektoren und Themen, Alarme, News',
+    kacheln: [['depotwert', 3, 2], ['heute', 3, 3], ['tageschart', 6, 3], ['bewegung', 12, 3], ['positionen', 4, 4], ['d-wasserfall', 4, 4], ['sektoren', 4, 4], ['themen', 4, 4], ['exits', 4, 3], ['news', 4, 4], ['d-unruhig', 4, 3]] },
+  dr: { name: 'Depot Struktur & Risiko', text: 'Wie ist mein Depot gebaut und was kann schiefgehen: Risiko, Verteilung, Gleichlauf, Stresstest, Faktoren, Zins/Öl/Dollar',
+    kacheln: [['d-risiko', 4, 3], ['verteilung', 4, 3], ['d-korrelation', 4, 3], ['d-stresstest', 4, 4], ['d-sensitiv', 4, 4], ['d-faktoren', 4, 4], ['benchmark', 4, 3], ['montecarlo', 4, 2], ['absicherung', 4, 2], ['d-unruhig', 4, 3]] },
+  mh: { name: 'Markt heute', text: 'Was passiert gerade: Markttreiber, Indizes, Sektoren, Themen, Cross-Asset, Regime, Termine, News',
+    kacheln: [['bewegung', 12, 3], ['maerkte', 4, 4], ['sektoren', 4, 4], ['themen', 4, 4], ['crossasset', 4, 4], ['regime', 4, 2], ['vix', 4, 2], ['news', 4, 4], ['makro', 4, 3], ['gamma', 4, 2]] },
+  mz: { name: 'Makro & Zinsen', text: 'Konjunktur, Inflation, Notenbanken und was eingepreist ist, dazu die Wirkung auf dein Depot',
+    kacheln: [['makrolage', 4, 2], ['fed', 4, 3], ['ezbpfad', 4, 2], ['zinskurve', 4, 2], ['makro', 4, 3], ['events', 4, 2], ['crossasset', 4, 4], ['makrotage', 4, 3], ['d-sensitiv', 4, 4], ['reden', 4, 3]] },
+  es: { name: 'Earnings-Saison', text: 'Wer meldet, was ist eingepreist, wie reagiert der Markt, hält die Bewegung an',
+    kacheln: [['earnings', 4, 3], ['es-moves', 4, 4], ['es-barometer', 4, 3], ['drift', 4, 3], ['news', 4, 4]] },
+  sm: { name: 'Smart Money & Positionierung', text: 'Faktorrotation, Bewertung, Positionierung, Insider, Dark Index, Regime',
+    kacheln: [['regime', 4, 2], ['gg-position', 4, 3], ['gg-dix', 4, 2], ['gg-stil', 4, 4], ['gg-kgv', 4, 3], ['insider', 4, 2], ['gg-insider', 4, 3]] },
+  vo: { name: 'Volatilität & Optionen', text: 'Wie nervös ist der Markt: VIX und Laufzeitstruktur, Gamma, Risikoprämie, eingepreiste Termine',
+    kacheln: [['vix', 4, 2], ['vo-struktur', 4, 3], ['gamma', 4, 2], ['regime', 4, 2], ['events', 4, 2], ['vrp', 4, 3], ['d-unruhig', 4, 3]] },
+  wh: { name: 'Weltlage & Handel', text: 'Brennpunkte, Engstellen, Handels-Frühindikatoren und Nachrichten',
+    kacheln: [['weltlage', 6, 4], ['handel', 6, 4], ['news', 6, 4], ['reden', 6, 3]] },
+  tc: { name: 'Thesen-Check', text: 'Für den Sonntag: Exit-Level, Wahrscheinlichkeiten laut Optionen, relative Stärke, News zu deinen Werten',
+    kacheln: [['exits', 6, 3], ['chancen', 6, 3], ['d-relativ', 4, 4], ['news', 4, 4], ['positionen', 4, 4]] },
+  rb: { name: 'Rückblick & Disziplin', text: 'Trade-Journal, Exit-Analyse, Benchmark, Gewinn nach Zeitraum, Freibetrag',
+    kacheln: [['journal', 4, 3], ['exitanalyse', 4, 3], ['benchmark', 4, 3], ['zeitraeume', 4, 3], ['freibetrag', 4, 2], ['verkaeufe', 4, 2]] },
+});
+function tfVorlageAnlegen(schluessel) {
+  const v = TAFEL_VORLAGEN[schluessel];
+  if (!v) return;
+  let name = v.name, n = 2;
+  while (tafelDaten.layouts.some((l) => l.name === name)) name = `${v.name} ${n++}`;
+  const kacheln = v.kacheln.filter(([art]) => KACHELN[art]).map(([art, w, h]) => ({ art, w: w ?? KACHELN[art].std[0], h: h ?? KACHELN[art].std[1] }));
+  const lay = { name, kacheln, vorlage: schluessel };
+  if (v.bezug) lay.bezug = { ...v.bezug };
+  if (v.handy) lay.handy = v.handy.filter(([art]) => KACHELN[art]).map(([art, h]) => ({ art, h }));
+  tafelDaten.layouts.push(lay);
+  tafelDaten.aktiv = name;
+  tafelSpeichern();
+  zeichneTafel();
+}
+function tfVorlagenZeigen() {
+  const box = el('tf-vorlagen');
+  box.hidden = !box.hidden;
+  if (box.hidden) return;
+  box.innerHTML = `<p class="sekundaer">Ein Arbeitsplatz ist ein fertiges Layout zu einer Frage. Danach kannst du es frei umbauen.</p>
+    <div class="tf-vorlagen-liste">${Object.entries(TAFEL_VORLAGEN).map(([k, v]) => `<button type="button" class="tf-vorlage" data-vorlage="${k}"><b>${esc(v.name)}</b><small>${esc(v.text)}</small></button>`).join('')}</div>
+    <div class="tf-layout-knoepfe"><button class="knopf" type="button" id="tf-bezug-schalter">${tafelLayout().bezug ? 'Dieses Layout vom Wert lösen' : 'Dieses Layout an einen Wert binden'}</button></div>`;
+  box.querySelectorAll('[data-vorlage]').forEach((b) => b.addEventListener('click', () => { box.hidden = true; tfVorlageAnlegen(b.dataset.vorlage); }));
+  el('tf-bezug-schalter').addEventListener('click', () => {
+    const lay = tafelLayout();
+    if (lay.bezug) delete lay.bezug; else lay.bezug = { art: 'wert', id: 'SPY', name: 'S&P 500 (SPY)' };
+    box.hidden = true;
+    tafelSpeichern();
+    zeichneTafel();
+  });
+}
 
 // ---- Raster-Logik des Dashboards ----
 // Jedes Widget hat eine feste Lage: Spalte x (0 bis 11), Zeile y, Breite w und Höhe h in Rasterfeldern.
@@ -7942,7 +8811,16 @@ async function kachelFuellen(knoten) {
   const art = KACHELN[k.art];
   const inhalt = knoten.querySelector('.tf-inhalt');
   knoten.gefuellt = `${k.w}x${k.h}`;
-  try { await art.zeige(inhalt, k.w, k.h); } catch { inhalt.innerHTML = '<p class="tf-unter">Die Daten sind gerade nicht verfügbar.</p>'; }
+  const ctx = art.bezug ? await tfBezugBereit() : null;
+  if (art.bezug) {
+    const kopf = knoten.querySelector('.tf-titel');
+    if (kopf) { kopf.textContent = tfTitel(k.art, ctx); if (ctx && !ctx.fehler && art.zielMit) kopf.href = art.zielMit(ctx); }
+    if (!tfBezugPasst(k.art, ctx)) {
+      inhalt.innerHTML = `<p class="tf-unter">${ctx?.fehler ? esc(ctx.fehler) : ctx ? (ctx.art === 'wert' ? 'Passt nur zu einer Marktrichtung.' : 'Passt nur zu einem einzelnen Wert.') : 'Wähle oben einen Wert oder eine Marktrichtung.'}</p>`;
+      return;
+    }
+  }
+  try { await art.zeige(inhalt, k.w, k.h, ctx); } catch { inhalt.innerHTML = '<p class="tf-unter">Die Daten sind gerade nicht verfügbar.</p>'; }
 }
 
 function kachelKnoten(k) {
@@ -7975,7 +8853,7 @@ function tafelAnwenden(ausser = null) {
 
 function tafelVorratZeichnen() {
   const da = new Set(tafelLayout().kacheln.map((k) => k.art));
-  el('tf-vorrat').innerHTML = Object.entries(KACHELN).filter(([art]) => !da.has(art))
+  el('tf-vorrat').innerHTML = Object.entries(KACHELN).filter(([art]) => !da.has(art) && tfPasst(art))
     .map(([art, k]) => `<button type="button" class="tf-vorrat-teil" data-art="${art}">${esc(k.titel)}</button>`).join('') || '<span class="sekundaer">Alle Widgets sind schon auf dem Dashboard.</span>';
   el('tf-leer').hidden = tafelLayout().kacheln.length > 0;
 }
@@ -7991,13 +8869,16 @@ function zeichneTafel() {
   el('tf-bearbeiten').textContent = tafelBearbeiten ? 'Fertig' : 'Bearbeiten';
   const lay = tafelLayout();
   if (tafelVorbereiten(lay)) tafelSpeichern();
+  tfBezugZeichnen();
+  // Bezug noch nicht aufgelöst: erst zeichnen, nach dem Laden noch einmal (dann ohne unpassende Widgets)
+  if (lay.bezug && !tfBezugFertig[lay.bezug.id] && !tafelBearbeiten) tfBezugBereit().then(() => { if (tafelLayout() === lay && !tafelBearbeiten && !el('seite-tafel').hidden) zeichneTafel(); });
   // Handy: eigene Reihenfolge und Höhe (siehe tfHandyZeichnen)
   if (tfHandy()) { tfHandyZeichnen(); return; }
   raster.classList.remove('handy-bearbeiten');
   el('tf-hinweis').textContent = tafelBearbeiten && Array.isArray(lay.handy) ? 'Auf dem Handy hat dieses Layout eine eigene Reihenfolge. Änderungen hier verschieben dort nichts.' : '';
   el('tf-wie-computer').hidden = true;
   // Reihenfolge im Dokument = von oben links nach unten rechts
-  raster.replaceChildren(...[...lay.kacheln].sort(nachLage).map(kachelKnoten));
+  raster.replaceChildren(...[...tfAnzeigeListe(lay)].sort(nachLage).map(kachelKnoten));
   tafelKnoten().forEach(kachelFuellen);
   tafelVorratZeichnen();
 }
@@ -8206,7 +9087,7 @@ el('tafel').addEventListener('click', (e) => {
     return;
   }
   // Antippen öffnet die volle Ansicht (außer man tippt einen Link im Widget an)
-  if (!e.target.closest('a')) location.hash = KACHELN[knoten.kachel.art].ziel;
+  if (!e.target.closest('a, button, [data-mf], input, select')) tfOeffnen(knoten.kachel.art);
 });
 
 // Aus dem Vorrat: antippen legt das Widget an die erste freie Stelle, ziehen legt es dort ab, wo man loslässt.
@@ -8241,13 +9122,15 @@ el('tf-vorrat').addEventListener('pointerdown', (e) => {
 });
 
 el('tf-bearbeiten').addEventListener('click', () => { tafelBearbeiten = !tafelBearbeiten; zeichneTafel(); });
+el('tf-arbeitsplatz').addEventListener('click', tfVorlagenZeigen);
 el('tf-layout').addEventListener('change', (e) => { tafelDaten.aktiv = e.target.value; tafelSpeichern(); zeichneTafel(); });
 el('tf-neu').addEventListener('click', () => {
   const name = prompt('Name des neuen Layouts, z. B. "Earnings-Tag":')?.trim().slice(0, 40);
   if (!name) return;
   if (tafelDaten.layouts.some((l) => l.name === name)) { el('tf-status').textContent = 'Ein Layout mit diesem Namen gibt es schon.'; return; }
   // Startet als Kopie des aktuellen Layouts, dann muss man nicht bei null anfangen
-  tafelDaten.layouts.push({ name, kacheln: structuredClone(tafelLayout().kacheln) });
+  const alt = tafelLayout();
+  tafelDaten.layouts.push({ name, kacheln: structuredClone(alt.kacheln), ...(alt.bezug ? { bezug: { ...alt.bezug } } : {}) });
   tafelDaten.aktiv = name;
   tafelSpeichern();
   zeichneTafel();
@@ -17855,8 +18738,10 @@ function tfHandyZeichnen() {
   const lay = tafelLayout();
   const raster = el('tafel');
   const liste = tfHandyListe(lay);
+  const ctx = lay.bezug ? tfBezugFertig[lay.bezug.id] : null;
+  const zeigen = tafelBearbeiten || !ctx ? liste : liste.filter((k) => tfSichtbar(k, ctx));
   raster.classList.toggle('handy-bearbeiten', tafelBearbeiten);
-  raster.replaceChildren(...liste.map((k, i) => {
+  raster.replaceChildren(...zeigen.map((k, i) => {
     const n = kachelKnoten({ art: k.art, x: 0, y: i, w: TF_HANDY_BREITE, h: k.h });
     n.dataset.handy = String(i);
     if (tafelBearbeiten) {
@@ -17873,7 +18758,7 @@ function tfHandyZeichnen() {
   tafelKnoten().forEach(kachelFuellen);
   // Vorrat: alle Widgets, die auf dem Handy (noch) fehlen
   const da = new Set(liste.map((k) => k.art));
-  el('tf-vorrat').innerHTML = Object.entries(KACHELN).filter(([art]) => !da.has(art))
+  el('tf-vorrat').innerHTML = Object.entries(KACHELN).filter(([art]) => !da.has(art) && tfPasst(art))
     .map(([art, k]) => `<button type="button" class="tf-vorrat-teil" data-art="${art}">${esc(k.titel)}</button>`).join('') || '<span class="sekundaer">Alle Widgets sind schon da.</span>';
   el('tf-leer').hidden = liste.length > 0;
   el('tf-hinweis').textContent = tafelBearbeiten

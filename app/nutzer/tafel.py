@@ -79,6 +79,14 @@ def _pruefen(daten: dict) -> dict:
                 kachel["y"] = min(MAX_Y, max(0, k["y"]))
             kacheln.append(kachel)
         eintrag = {"name": name, "kacheln": kacheln}
+        # Arbeitsplatz: an einen Wert oder eine Marktrichtung gebunden (siehe app/markt/bezug.py)
+        bezug = lay.get("bezug")
+        if isinstance(bezug, dict) and bezug.get("art") in ("wert", "richtung"):
+            bid = str(bezug.get("id", "")).strip()[:60]
+            if bid and re.fullmatch(r"[\w^.=:\- &/(),]{1,60}", bid):
+                eintrag["bezug"] = {"art": bezug["art"], "id": bid, "name": str(bezug.get("name") or bid)[:60]}
+        if re.fullmatch(r"[a-z]{1,4}", str(lay.get("vorlage", ""))):
+            eintrag["vorlage"] = lay["vorlage"]
         # Eigene Reihenfolge fürs Handy (eine Spalte): Liste aus Widget und Höhe. Fehlt sie, zeigt das Handy
         # die Widgets des großen Bildschirms von oben links nach unten rechts.
         if isinstance(lay.get("handy"), list):

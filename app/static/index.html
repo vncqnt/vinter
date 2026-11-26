@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="Vinter">
   <link rel="preload" href="schriften/unbounded-400-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="schriften/manrope-400-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=248">
+  <link rel="stylesheet" href="style.css?v=256">
   <link rel="stylesheet" href="vinter.css?v=1">
 </head>
 <body>
@@ -126,9 +126,12 @@
         <h1>Dashboard</h1>
         <div class="tafel-steuerung">
           <select id="tf-layout" aria-label="Layout wählen"></select>
+          <button class="knopf" id="tf-arbeitsplatz" type="button">Arbeitsplatz</button>
           <button class="knopf" id="tf-bearbeiten" type="button" aria-pressed="false">Bearbeiten</button>
         </div>
       </div>
+      <section class="tf-werkzeug tf-vorlagen" id="tf-vorlagen" hidden aria-label="Arbeitsplatz anlegen"></section>
+      <div class="tf-bezug" id="tf-bezug" hidden></div>
       <section class="tf-werkzeug" id="tf-werkzeug" hidden aria-label="Dashboard bearbeiten">
         <p class="sekundaer">Widgets aufs Dashboard ziehen oder antippen. Auf dem Dashboard: ziehen zum Verschieben, rechte oder untere Kante bzw. Ecke ziehen für die Größe, × zum Entfernen. Kleine Lücken schließen sich von selbst.</p>
         <div class="tf-vorrat" id="tf-vorrat"></div>
@@ -1240,6 +1243,6 @@
   <script src="lib/karte/d3.min.js"></script>
   <script src="lib/karte/topojson-client.min.js"></script>
   <script src="lib/lightweight-charts/lightweight-charts.standalone.production.js"></script>
-  <script src="app.js?v=302"></script>
+  <script src="app.js?v=310"></script>
 </body>
 </html>
